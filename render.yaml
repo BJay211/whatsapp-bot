@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: n8n-service
+    env: docker
+    plan: free
+    dockerfilePath: ./n8n.Dockerfile
+    envVars:
+      - key: N8N_HOST
+        value: n8n-service.onrender.com
+      - key: WEBHOOK_URL
+        value: https://n8n-service.onrender.com/
+
+  - type: web
+    name: evolution-api
+    env: docker
+    plan: free
+    dockerfilePath: ./evolution.Dockerfile
+    envVars:
+      - key: AUTHENTICATION_API_KEY
+        value: 123456
+      - key: DATABASE_ENABLED
+        value: "false" # We will use local JSON for now to keep it simple and free

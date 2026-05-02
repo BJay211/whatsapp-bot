@@ -20,10 +20,12 @@ services:
     envVars:
       - key: AUTHENTICATION_API_KEY
         value: 123456
-      - key: DATABASE_TYPE
-        value: postgres
       - key: DATABASE_ENABLED
-        value: "false"
+        value: "true"
+      - key: DATABASE_CONNECTION_URI
+        value: "postgresql://bjay:axyUxIkyBo3eAcjcJCW8vexsfu6R8KiR@dpg-d7r6e2m7r5hc7397ajhg-a/evolution_h4r9"
+      - key: DATABASE_CONNECTION_CLIENT_NAME
+        value: "evolution_api"
       - key: CACHE_REDIS_ENABLED
         value: "false"
       - key: CACHE_LOCAL_ENABLED

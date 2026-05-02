@@ -9,6 +9,8 @@ services:
         value: n8n-service.onrender.com
       - key: WEBHOOK_URL
         value: https://n8n-service.onrender.com/
+      - key: N8N_ENCRYPTION_KEY
+        value: bjay_secure_key_2026
 
   - type: web
     name: evolution-api
@@ -18,5 +20,11 @@ services:
     envVars:
       - key: AUTHENTICATION_API_KEY
         value: 123456
+      - key: DATABASE_TYPE
+        value: postgres
       - key: DATABASE_ENABLED
-        value: "false" # We will use local JSON for now to keep it simple and free
+        value: "false"
+      - key: CACHE_REDIS_ENABLED
+        value: "false"
+      - key: CACHE_LOCAL_ENABLED
+        value: "true"

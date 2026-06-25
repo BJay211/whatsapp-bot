@@ -25,7 +25,7 @@ services:
       - key: DATABASE_PROVIDER
         value: postgresql
       - key: DATABASE_CONNECTION_URI
-        value: "postgresql://bjay:axyUxIkyBo3eAcjcJCW8vexsfu6R8KiR@dpg-d7r6e2m7r5hc7397ajhg-a:5432/evolution_h4r9?sslmode=disable"
+        value: "postgresql://automation_db_33ck_user:hW7AJrzQuvBE3Ox2eleuajlsR3lbaQh5@dpg-d8ults3tqb8s73be5u20-a/automation_db_33ck"
       - key: DATABASE_CONNECTION_CLIENT_NAME
         value: "evolution_api"
       - key: DATABASE_SAVE_DATA_INSTANCE

@@ -1,0 +1,150 @@
+{
+  "name": "Bonjee - WhatsApp Ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-ingest",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Evolution API webhook\nconst body = $input.first().json;\n\n// Evolution API can send different payload structures\nlet event = body;\nif (body.body) event = body.body;\nif (body.data) event = body.data;\n\n// Check if it's a message event\nconst data = event.data || event.message || event;\nconst key = data.key || data;\n\nconst messageId = key.id || data.id || data.external_id || Math.random().toString();\nconst remoteJid = key.remoteJid || data.remoteJid || data.from || '';\nconst isGroup = remoteJid.includes('@g.us');\nconst fromMe = key.fromMe || data.fromMe || false;\n\n// Extract message content\nlet content = '';\nlet messageType = 'text';\nif (data.message?.conversation) {\n  content = data.message.conversation;\n  messageType = 'text';\n} else if (data.message?.extendedTextMessage?.text) {\n  content = data.message.extendedTextMessage.text;\n  messageType = 'text';\n} else if (data.message?.imageMessage) {\n  content = data.message.imageMessage.caption || '[Image]';\n  messageType = 'image';\n} else if (data.message?.videoMessage) {\n  content = data.message.videoMessage.caption || '[Video]';\n  messageType = 'video';\n} else if (data.message?.audioMessage) {\n  content = '[Audio]';\n  messageType = 'audio';\n} else if (data.body) {\n  content = data.body;\n}\n\n// Check if mentioned me (simple check)\nconst mentionedMe = content.toLowerCase().includes('me') || content.includes('@');\n\nconst timestamp = data.messageTimestamp \n  ? new Date(data.messageTimestamp * 1000).toISOString()\n  : new Date().toISOString();\n\nreturn {\n  external_id: messageId,\n  source: 'whatsapp',\n  chat_id: remoteJid,\n  chat_name: data.pushName || (isGroup ? 'Group' : remoteJid.split('@')[0]),\n  is_group: isGroup,\n  sender_id: data.key?.participant || remoteJid,\n  sender_name: data.pushName || '',\n  message_type: messageType,\n  content: content,\n  has_media: messageType !== 'text',\n  mentioned_me: mentionedMe,\n  timestamp: timestamp,\n  raw_payload: event,\n  from_me: fromMe\n};"
+      },
+      "name": "Normalize",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -20,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "messages",
+        "columns": "external_id, source, chat_id, chat_name, is_group, sender_id, sender_name, message_type, content, has_media, mentioned_me, timestamp, raw_payload",
+        "options": {
+          "onConflict": "external_id"
+        }
+      },
+      "name": "Insert Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.from_me}}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "name": "Only Others Messages",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"ok\"}",
+        "options": {}
+      },
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        640,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "context-summarizer"
+      },
+      "name": "Trigger Summarizer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        640,
+        400
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Insert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Message": {
+      "main": [
+        [
+          {
+            "node": "Only Others Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Others Messages": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trigger Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
+#endregion: json

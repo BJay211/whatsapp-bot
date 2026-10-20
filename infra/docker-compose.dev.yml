@@ -1,0 +1,67 @@
+# Local development stack
+# Use this to test everything locally before deploying to Render
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: bonjee-postgres
+    environment:
+      POSTGRES_USER: bonjee
+      POSTGRES_PASSWORD: bonjee_pass
+      POSTGRES_DB: bonjee
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../db/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bonjee"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  evolution:
+    image: evolutionapi/evolution-api:latest
+    container_name: bonjee-evolution
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution_data:/data
+    environment:
+      - PORT=8080
+      - SERVER_URL=http://localhost:8080
+      - DATABASE_URL=postgresql://bonjee:bonjee_pass@postgres:5432/bonjee
+      - AUTHENTICATION_API_KEY=dev_api_key_change_me
+      - CORS_ORIGIN=*
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: bonjee-n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - N8N_ENCRYPTION_KEY=dev_encryption_key_change_me
+      - GENERIC_TIMEZONE=UTC
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=bonjee
+      - DB_POSTGRESDB_USER=bonjee
+      - DB_POSTGRESDB_PASSWORD=bonjee_pass
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_EDITOR_BASE_URL=http://localhost:5678/
+
+volumes:
+  postgres_data:
+  evolution_data:
+  n8n_data:

@@ -1,0 +1,321 @@
+{
+  "name": "Bonjee - Context Summarizer",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM context_state ORDER BY updated_at DESC LIMIT 1;"
+      },
+      "name": "Get Context State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM settings WHERE key = 'summary_config';"
+      },
+      "name": "Get Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM messages WHERE timestamp > (SELECT last_summary_at FROM context_state ORDER BY updated_at DESC LIMIT 1) AND processed = false ORDER BY timestamp ASC LIMIT 100;"
+      },
+      "name": "Get New Messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM notifications WHERE post_time > (SELECT last_summary_at FROM context_state ORDER BY updated_at DESC LIMIT 1) AND processed = false ORDER BY post_time ASC LIMIT 100;"
+      },
+      "name": "Get New Notifications",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine messages and notifications\nconst messages = $items('Get New Messages', 0, $items('Get New Messages').length);\nconst notifications = $items('Get New Notifications', 0, $items('Get New Notifications').length);\n\nconst items = [];\nfor (let i = 0; i < messages.length; i++) {\n  const m = messages[i].json;\n  items.push({\n    type: 'whatsapp',\n    source: m.source,\n    chat_id: m.chat_id,\n    chat_name: m.chat_name,\n    is_group: m.is_group,\n    sender: m.sender_name || m.sender_id,\n    content: m.content,\n    timestamp: m.timestamp,\n    mentioned_me: m.mentioned_me,\n    id: m.id\n  });\n}\nfor (let i = 0; i < notifications.length; i++) {\n  const n = notifications[i].json;\n  items.push({\n    type: 'notification',\n    app_package: n.app_package,\n    app_name: n.app_name,\n    title: n.title,\n    content: n.content,\n    timestamp: n.post_time,\n    id: n.id\n  });\n}\n\nitems.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));\n\nreturn {items: items, count: items.length};"
+      },
+      "name": "Combine Items",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        60,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.count}}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Has New Items",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        280,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple heuristic for context priority (can be enhanced with LLM)\nconst items = $json.items;\nconst config = $items('Get Config')[0]?.json.value || {debounce_minutes_nonurgent: 10, priority_threshold: 60};\nconst contextState = $items('Get Context State')[0]?.json || {};\n\nconst urgentKeywords = ['asap', 'urgent', 'emergency', 'deadline', 'due', 'overdue', 'pay now', 'meeting now', 'immediately'];\nconst questionKeywords = ['can you', 'could you', 'will you', 'are you', 'do you', '?'];\nconst timeKeywords = ['tomorrow', 'today', 'tonight', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'am', 'pm', 'by '];\n\nlet score = 0;\nlet reasons = [];\n\nconst now = new Date();\nconst lastSummary = new Date(contextState.last_summary_at || '1970-01-01');\nconst minutesSince = (now - lastSummary) / (1000 * 60);\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const text = (item.content || item.title || '').toLowerCase();\n  \n  for (let k = 0; k < urgentKeywords.length; k++) {\n    if (text.includes(urgentKeywords[k])) {\n      score += 30;\n      reasons.push('urgent_keyword');\n      break;\n    }\n  }\n  \n  if (item.mentioned_me) {\n    score += 25;\n    reasons.push('mention');\n  }\n  \n  for (let k = 0; k < questionKeywords.length; k++) {\n    if (text.includes(questionKeywords[k]) || text.endsWith('?')) {\n      score += 15;\n      reasons.push('question');\n      break;\n    }\n  }\n  \n  for (let k = 0; k < timeKeywords.length; k++) {\n    if (text.includes(timeKeywords[k])) {\n      score += 20;\n      reasons.push('time_entity');\n      break;\n    }\n  }\n}\n\n// Burst detection\nif (items.length >= 5) {\n  score += 20;\n  reasons.push('burst');\n}\n\n// Boost if it's been a while\nif (minutesSince > 60) {\n  score += 10;\n}\n\nconst uniqueReasons = [...new Set(reasons)];\nconst threshold = config.priority_threshold || 60;\nconst shouldSummarize = score >= threshold || minutesSince > 180;\n\nreturn {\n  items: items,\n  score: score,\n  reasons: uniqueReasons,\n  shouldSummarize: shouldSummarize,\n  minutesSinceLastSummary: Math.round(minutesSince),\n  config: config\n};"
+      },
+      "name": "Calculate Priority",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        500,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.shouldSummarize}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Should Summarize?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        720,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {},
+        "messages": {
+          "values": [
+            {
+              "content": "=You are Bonjee Bot, a personal briefing assistant. \n\nYour job is to summarize messages and notifications for the user with context-based intelligence.\n\nPRIORITIES:\n1. Deadlines - anything with time/date (extract exact times when possible)\n2. Action items - things the user needs to do or respond to\n3. Urgent matters - ASAP, emergencies, time sensitive\n4. Important FYI - things to know but not necessarily act on\n\nRULES:\n- Be concise and actionable\n- Group by source (WhatsApp groups, DMs, specific apps)\n- Extract deadlines with due_date if inferable (use ISO format if possible)\n- Identify who needs to act (default to \"me\" if unclear)\n- Only include items from the provided data\n- Return ONLY valid JSON, no markdown, no explanation\n\nReturn this exact structure:\n{\n  \"summary_text\": \"Brief 2-4 sentence overview\",\n  \"summary_json\": {\n    \"overview\": \"One line summary\",\n    \"urgent\": [{\"title\": \"...\", \"source\": \"...\", \"reason\": \"...\"}],\n    \"deadlines\": [{\"task\": \"...\", \"due_date\": \"YYYY-MM-DDTHH:mm:ssZ or null\", \"due_text\": \"original time text\", \"source\": \"...\", \"priority\": \"high|medium|low\"}],\n    \"action_items\": [{\"action\": \"...\", \"source\": \"...\", \"assigned_to\": \"me\", \"priority\": \"high|medium|low\", \"due_date\": null}],\n    \"fyi\": [{\"title\": \"...\", \"source\": \"...\"}]\n  },\n  \"trigger_reason\": \"{{$json.reasons.join(',')}}\"\n}\n\nDATA:\n{{$json.items.map(i => `[${i.type.toUpperCase()}] ${i.type === 'whatsapp' ? (i.is_group ? i.chat_name + ' - ' + i.sender : 'DM from ' + i.sender) : i.app_name + ' - ' + (i.title || '')} | ${i.content || i.title} | ${i.timestamp}`).join('\\n\\n')}}\n\nScore: {{$json.score}} | Reasons: {{$json.reasons.join(', ')}} | Items: {{$json.items.length}}"
+            }
+          ]
+        }
+      },
+      "name": "Generate Summary",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        940,
+        290
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM response\nconst response = $json.message?.content || $json.text || $json.choices?.[0]?.message?.content || '';\nlet parsed;\ntry {\n  // Remove markdown code blocks if present\n  const cleaned = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  parsed = {\n    summary_text: response,\n    summary_json: {\n      overview: response.substring(0, 100),\n      urgent: [],\n      deadlines: [],\n      action_items: [],\n      fyi: []\n    },\n    trigger_reason: $items('Calculate Priority')[0].json.reasons.join(',')\n  };\n}\n\nconst items = $items('Calculate Priority')[0].json.items;\nconst whatsappCount = items.filter(i => i.type === 'whatsapp').length;\nconst notifCount = items.filter(i => i.type === 'notification').length;\n\nreturn {\n  ...parsed,\n  message_count: whatsappCount,\n  notification_count: notifCount,\n  time_range_start: items[0]?.timestamp,\n  time_range_end: items[items.length-1]?.timestamp\n};"
+      },
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1160,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "summaries",
+        "columns": "summary_text, summary_json, trigger_reason, message_count, notification_count, time_range_start, time_range_end"
+      },
+      "name": "Save Summary",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE context_state SET last_summary_at = NOW(), last_message_ts = NOW(), last_notification_ts = NOW(), debounce_until = NOW() + INTERVAL '10 minutes' WHERE id = (SELECT id FROM context_state ORDER BY updated_at DESC LIMIT 1);"
+      },
+      "name": "Update Context State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE messages SET processed = true WHERE timestamp > (SELECT last_summary_at FROM context_state ORDER BY updated_at DESC LIMIT 1) - INTERVAL '1 hour';\nUPDATE notifications SET processed = true WHERE post_time > (SELECT last_summary_at FROM context_state ORDER BY updated_at DESC LIMIT 1) - INTERVAL '1 hour';"
+      },
+      "name": "Mark Processed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        290
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Context State",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Context State": {
+      "main": [
+        [
+          {
+            "node": "Get New Messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get New Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get New Messages": {
+      "main": [
+        [
+          {
+            "node": "Combine Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get New Notifications": {
+      "main": [
+        [
+          {
+            "node": "Combine Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Items": {
+      "main": [
+        [
+          {
+            "node": "Has New Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Items": {
+      "main": [
+        [
+          {
+            "node": "Calculate Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Priority": {
+      "main": [
+        [
+          {
+            "node": "Should Summarize?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Summarize?": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+tag: test
+  },
+  "updatedAt": "2025-09-19T00:00:00.000Z",
+  "versionId": "1"
+}

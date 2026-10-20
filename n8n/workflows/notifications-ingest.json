@@ -1,0 +1,120 @@
+{
+  "name": "Bonjee - Notifications Ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notifications-ingest",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "rawBody": true
+        }
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Android notification data\nconst body = $input.first().json;\n\n// Handle raw body if needed\nlet data = body;\nif (body.body) {\n  try { data = JSON.parse(body.body); } catch (e) { data = body; }\n}\n\n// Deduplication key\nconst externalId = data.external_id || `${data.app_package}_${data.post_time}_${Math.random()}`;\n\nreturn {\n  external_id: externalId,\n  app_package: data.app_package || '',\n  app_name: data.app_name || '',\n  title: data.title || '',\n  content: data.content || '',\n  ticker: data.ticker || '',\n  post_time: data.post_time ? new Date(data.post_time).toISOString() : new Date().toISOString(),\n  is_clearable: data.is_clearable !== false,\n  category: data.category || '',\n  raw_payload: data.raw || data\n};"
+      },
+      "name": "Normalize",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -20,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "notifications",
+        "columns": "external_id, app_package, app_name, title, content, ticker, post_time, is_clearable, category, raw_payload",
+        "options": {
+          "onConflict": "external_id"
+        }
+      },
+      "name": "Insert Notification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"ok\"}",
+        "options": {}
+      },
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "context-summarizer"
+      },
+      "name": "Trigger Summarizer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        400,
+        420
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Insert Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Notification": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trigger Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

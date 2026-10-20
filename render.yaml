@@ -1,0 +1,129 @@
+# Render Blueprint for Bonjee Bot
+# This will create all services with one click (after setting env vars)
+
+services:
+  # Evolution API - WhatsApp connection
+  - type: web
+    name: bonjee-evolution
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: https://github.com/EvolutionAPI/evolution-api.git
+    disk:
+      name: evolution-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: SERVER_URL
+        fromService:
+          type: web
+          name: bonjee-evolution
+          property: host
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bonjee-db
+          property: connectionString
+      - key: AUTHENTICATION_API_KEY
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: CORS_METHODS
+        value: "GET,POST,PUT,DELETE"
+      - key: CORS_CREDENTIALS
+        value: "true"
+
+  # n8n - Orchestration
+  - type: web
+    name: bonjee-n8n
+    runtime: docker
+    plan: starter
+    image:
+      url: docker.n8n.io/n8nio/n8n:latest
+    disk:
+      name: n8n-data
+      mountPath: /home/node/.n8n
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 5678
+      - key: N8N_ENCRYPTION_KEY
+        generateValue: true
+      - key: GENERIC_TIMEZONE
+        value: UTC
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: bonjee-db
+          property: host
+      - key: DB_POSTGRESDB_PORT
+        fromDatabase:
+          name: bonjee-db
+          property: port
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: bonjee-db
+          property: database
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: bonjee-db
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: bonjee-db
+          property: password
+      - key: WEBHOOK_URL
+        fromService:
+          type: web
+          name: bonjee-n8n
+          property: host
+        format: https://%s/
+      - key: N8N_EDITOR_BASE_URL
+        fromService:
+          type: web
+          name: bonjee-n8n
+          property: host
+        format: https://%s/
+      - key: EXECUTIONS_DATA_SAVE_ON_ERROR
+        value: all
+      - key: EXECUTIONS_DATA_SAVE_ON_SUCCESS
+        value: all
+      - key: EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS
+        value: true
+
+  # Next.js Dashboard
+  - type: web
+    name: bonjee-dashboard
+    runtime: node
+    plan: starter
+    buildCommand: cd apps/dashboard && npm install && npm run build
+    startCommand: cd apps/dashboard && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bonjee-db
+          property: connectionString
+      - key: N8N_BASE_URL
+        fromService:
+          type: web
+          name: bonjee-n8n
+          property: host
+        format: https://%s
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: NEXTAUTH_URL
+        fromService:
+          type: web
+          name: bonjee-dashboard
+          property: host
+        format: https://%s
+
+databases:
+  - name: bonjee-db
+    plan: starter
+    databaseName: bonjee
+    user: bonjee_user

@@ -1,0 +1,295 @@
+{
+  "name": "Bonjee Bot - Complete System",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bonjee-webhook",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "name": "Evolution API Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        300
+      ],
+      "webhookId": "bonjee-evolution-webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notifications-ingest",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "rawBody": true
+        }
+      },
+      "name": "Android Notifications Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        500
+      ],
+      "webhookId": "bonjee-notifications-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced Evolution API webhook normalization\nconst body = $input.first().json;\n\nlet event = body;\nif (body.body) event = body.body;\nif (body.data && typeof body.data === 'object') event = body.data;\n\nconst eventType = event.event || body.event || 'unknown';\n\n// Only process message events\nif (eventType !== 'messages.upsert' && eventType !== 'MESSAGES_UPSERT' && !eventType.includes('message')) {\n  return { skip: true, reason: 'not_message_event' };\n}\n\nconst data = event.data || event.message || event;\nconst key = data.key || data;\n\nconst messageId = key.id || data.id || data.external_id || require('crypto').randomUUID();\nconst remoteJid = key.remoteJid || data.remoteJid || data.from || '';\nconst isGroup = remoteJid.includes('@g.us');\nconst fromMe = key.fromMe || data.fromMe || false;\n\n// Extract message content with support for various types\nlet content = '';\nlet messageType = 'text';\nlet hasMedia = false;\n\nif (data.message?.conversation) {\n  content = data.message.conversation;\n  messageType = 'text';\n} else if (data.message?.extendedTextMessage?.text) {\n  content = data.message.extendedTextMessage.text;\n  messageType = 'text';\n} else if (data.message?.imageMessage) {\n  content = data.message.imageMessage.caption || '[Image]';\n  messageType = 'image';\n  hasMedia = true;\n} else if (data.message?.videoMessage) {\n  content = data.message.videoMessage.caption || '[Video]';\n  messageType = 'video';\n  hasMedia = true;\n} else if (data.message?.audioMessage) {\n  content = '[Audio/Voice Note]';\n  messageType = 'audio';\n  hasMedia = true;\n} else if (data.message?.documentMessage) {\n  content = data.message.documentMessage.caption || '[Document: ' + (data.message.documentMessage.fileName || 'file') + ']';\n  messageType = 'document';\n  hasMedia = true;\n} else if (data.body) {\n  content = data.body;\n  messageType = 'text';\n}\n\n// Check if mentioned me\nconst mentionedMe = content.toLowerCase().includes('@me') || \n                    content.toLowerCase().match(/\\b(me|you)\\b/i) || \n                    content.includes('@');\n\nconst timestamp = data.messageTimestamp \n  ? new Date(data.messageTimestamp * 1000).toISOString()\n  : data.timestamp \n    ? new Date(data.timestamp).toISOString()\n    : new Date().toISOString();\n\nreturn {\n  skip: false,\n  external_id: messageId,\n  source: 'whatsapp',\n  chat_id: remoteJid,\n  chat_name: data.pushName || (isGroup ? remoteJid.split('@')[0] : remoteJid.split('@')[0]),\n  is_group: isGroup,\n  sender_id: data.key?.participant || remoteJid,\n  sender_name: data.pushName || data.senderName || '',\n  message_type: messageType,\n  content: content,\n  has_media: hasMedia,\n  mentioned_me: !!mentionedMe,\n  timestamp: timestamp,\n  raw_payload: event,\n  from_me: fromMe,\n  instance_id: data.instanceId || event.instanceId || 'default'\n};"
+      },
+      "name": "Normalize WhatsApp Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Android notification\nconst body = $input.first().json;\n\nlet data = body;\nif (body.body) {\n  try { \n    data = typeof body.body === 'string' ? JSON.parse(body.body) : body.body; \n  } catch (e) { \n    data = body; \n  }\n}\n\nconst externalId = data.external_id || `${data.app_package}_${data.post_time || Date.now()}_${Math.random().toString(36).substr(2,9)}`;\n\nreturn {\n  external_id: externalId,\n  app_package: data.app_package || 'unknown',\n  app_name: data.app_name || data.app_package || 'Unknown App',\n  title: data.title || '',\n  content: data.content || data.text || '',\n  ticker: data.ticker || '',\n  post_time: data.post_time ? new Date(data.post_time).toISOString() : new Date().toISOString(),\n  is_clearable: data.is_clearable !== false,\n  category: data.category || '',\n  raw_payload: data\n};"
+      },
+      "name": "Normalize Notification",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -580,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.skip}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Should Skip?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "messages",
+        "columns": "external_id, source, chat_id, chat_name, is_group, sender_id, sender_name, message_type, content, has_media, mentioned_me, timestamp, raw_payload",
+        "options": {
+          "onConflict": "external_id"
+        }
+      },
+      "name": "Save WhatsApp Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        200
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "notifications",
+        "columns": "external_id, app_package, app_name, title, content, ticker, post_time, is_clearable, category, raw_payload",
+        "options": {
+          "onConflict": "external_id"
+        }
+      },
+      "name": "Save Notification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        500
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"ok\", \"message\": \"processed\"}",
+        "options": {}
+      },
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        40,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "Bonjee - Context Summarizer"
+      },
+      "name": "Trigger Context Summarizer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        40,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "health",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Health Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        100
+      ],
+      "webhookId": "bonjee-health"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"healthy\", \"service\": \"bonjee-bot\", \"timestamp\": \"{{$now.toISO()}}\"}",
+        "options": {}
+      },
+      "name": "Health Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -580,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Evolution API Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize WhatsApp Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Android Notifications Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "Should Skip?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Notification": {
+      "main": [
+        [
+          {
+            "node": "Save Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Skip?": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save WhatsApp Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trigger Context Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Notification": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trigger Context Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check": {
+      "main": [
+        [
+          {
+            "node": "Health Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1",
+  "id": "BonjeeBotComplete",
+  "tags": [
+    {
+      "name": "bonjee",
+      "id": "bonjee-tag"
+    }
+  ]
+}

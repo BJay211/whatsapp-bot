@@ -35,7 +35,9 @@ $sdkDir = $Sdk.Replace("\", "/").Replace(":", "\:")
 Set-Content -Path (Join-Path $Root "local.properties") -Value "sdk.dir=$sdkDir" -Encoding ASCII
 
 $gradlew = Join-Path $Root "gradlew.bat"
-if (-not (Test-Path $gradlew)) {
+$localGradle = Join-Path $Toolchain "gradle-8.7\bin\gradle.bat"
+
+if (-not (Test-Path $gradlew) -and -not (Test-Path $localGradle)) {
     Write-Host "[build] Gradle wrapper missing. Generating it..." -ForegroundColor Yellow
     $gradleHome = Join-Path $Toolchain "gradle-8.7"
     Push-Location $Root
@@ -43,13 +45,22 @@ if (-not (Test-Path $gradlew)) {
     Pop-Location
 }
 
+# Prefer the already-extracted local Gradle: the wrapper would download
+# another 134 MB distribution into ~/.gradle for no reason.
+if (Test-Path $localGradle) {
+    $runner = $localGradle
+    Write-Host "[build] Using bundled Gradle: $localGradle" -ForegroundColor Cyan
+} else {
+    $runner = $gradlew
+}
+
 $task = if ($Release) { "assembleRelease" } else { "assembleDebug" }
 $args = @($task, "--stacktrace")
 if ($Clean) { $args = @("clean") + $args }
 
-Write-Host "[build] Running: gradlew $($args -join ' ')" -ForegroundColor Cyan
+Write-Host "[build] Running: $task" -ForegroundColor Cyan
 Push-Location $Root
-& $gradlew @args
+& $runner @args
 $code = $LASTEXITCODE
 Pop-Location
 

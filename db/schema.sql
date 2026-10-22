@@ -122,9 +122,17 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
 CREATE INDEX IF NOT EXISTS idx_messages_processed ON messages(processed);
 CREATE INDEX IF NOT EXISTS idx_messages_mentioned_me ON messages(mentioned_me);
 
+-- Full-text search indexes used by the assistant's "ask" endpoint.
+-- The two-argument to_tsvector() form is IMMUTABLE, so it can be indexed.
+CREATE INDEX IF NOT EXISTS idx_messages_fts
+  ON messages USING GIN (to_tsvector('simple', COALESCE(content, '')));
+
 CREATE INDEX IF NOT EXISTS idx_notifications_post_time ON notifications(post_time DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_app_package ON notifications(app_package);
 CREATE INDEX IF NOT EXISTS idx_notifications_processed ON notifications(processed);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_fts
+  ON notifications USING GIN (to_tsvector('simple', COALESCE(content, '')));
 
 CREATE INDEX IF NOT EXISTS idx_summaries_generated_at ON summaries(generated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_deadlines_due_date ON deadlines(due_date);
@@ -140,9 +148,11 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Triggers
+-- Triggers (drop first so this file can be run more than once)
+DROP TRIGGER IF EXISTS update_settings_updated_at ON settings;
 CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_context_state_updated_at ON context_state;
 CREATE TRIGGER update_context_state_updated_at BEFORE UPDATE ON context_state
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

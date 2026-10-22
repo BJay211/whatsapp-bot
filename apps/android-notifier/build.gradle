@@ -10,7 +10,3 @@ allprojects {
         mavenCentral()
     }
 }
-
-tasks.register('clean', Delete) {
-    delete rootProject.layout.buildDirectory
-}

@@ -27,7 +27,6 @@ class AskActivity : AppCompatActivity() {
         prefs = Prefs.get(this)
 
         binding.btnAsk.setOnClickListener { ask() }
-        binding.editQuestion.setOnClickListener { }
         binding.btnBack.setOnClickListener { finish() }
     }
 

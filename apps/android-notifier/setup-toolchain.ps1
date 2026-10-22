@@ -27,9 +27,18 @@ function Fail($m) { Write-Host "[setup] ERROR: $m" -ForegroundColor Red; exit 1 
 
 New-Item -ItemType Directory -Force -Path $Toolchain, $Downloads | Out-Null
 
+# Reuse a manually downloaded Azul archive if present.
+$zulu = Join-Path $Downloads "zulu17.zip"
+$jdkZip = Join-Path $Downloads "jdk17.zip"
+if ((Test-Path $zulu) -and -not (Test-Path $jdkZip)) {
+    Move-Item -Path $zulu -Destination $jdkZip -Force
+    Say "Using previously downloaded Azul JDK archive"
+}
+
 # ------------------------------------------------------------------ downloads
 $assets = @(
-    @{ Name = "jdk17.zip";    Url = "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse" },
+    # Adoptium redirects to GitHub, which was unusably slow here. Azul's CDN is far faster.
+    @{ Name = "jdk17.zip";    Url = "https://cdn.azul.com/zulu/bin/zulu17.54.21-ca-jdk17.0.13-win_x64.zip" },
     @{ Name = "cmdtools.zip"; Url = "https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip" },
     @{ Name = "gradle.zip";   Url = "https://services.gradle.org/distributions/gradle-8.7-bin.zip" }
 )
@@ -48,7 +57,7 @@ foreach ($a in $assets) {
     Say "Downloading $($a.Name) (resumable, this can take a while on a slow link) ..."
     # curl.exe supports resume + retries, which Invoke-WebRequest does not do well.
     for ($attempt = 1; $attempt -le 8; $attempt++) {
-        & curl.exe -L --fail --retry 3 --retry-delay 3 --connect-timeout 30 `
+        & curl.exe -L --fail --silent --show-error --retry 3 --retry-delay 3 --connect-timeout 30 `
             --speed-limit 2048 --speed-time 90 `
             --max-time 3600 -C - -o $target $a.Url
         $code = $LASTEXITCODE

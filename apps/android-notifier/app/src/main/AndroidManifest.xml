@@ -24,6 +24,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".AskActivity"
+            android:exported="false"
+            android:label="Ask Bonjee"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".NotificationListener"
             android:exported="true"

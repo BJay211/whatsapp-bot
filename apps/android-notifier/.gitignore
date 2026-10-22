@@ -1,0 +1,13 @@
+# Build output
+build/
+.gradle/
+local.properties
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+
+# Toolchain (JDK, Android SDK, Gradle) - large, re-created by setup-toolchain.ps1
+.toolchain/

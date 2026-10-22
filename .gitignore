@@ -1,0 +1,29 @@
+# Local toolchains / builds (re-created by scripts)
+.toolchain/
+apps/android-notifier/.toolchain/
+apps/android-notifier/build/
+apps/android-notifier/app/build/
+apps/android-notifier/.gradle/
+apps/android-notifier/local.properties
+*.apk
+*.aab
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# Secrets and local env
+.env
+.env.local
+.env.*.local
+*.pem
+*.keystore
+*.jks
+
+# Logs / OS cruft
+*.log
+.DS_Store
+Thumbs.db

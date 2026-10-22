@@ -1,75 +1,250 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp"
-    tools:context=".MainActivity">
+    android:fillViewport="true">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Bonjee Notifier"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_gravity="center"
-        android:layout_marginBottom="32dp" />
-
-    <TextView
-        android:id="@+id/txtStatus"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Status: Checking..."
-        android:textSize="16sp"
-        android:layout_marginBottom="24dp" />
-
-    <com.google.android.material.textfield.TextInputLayout
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:hint="n8n Webhook URL">
+        android:orientation="vertical"
+        android:padding="16dp">
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/editWebhookUrl"
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bonjee Notifier"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:alpha="0.7"
+            android:text="Captures notifications and forwards them to your n8n instance." />
+
+        <!-- ================= STATUS ================= -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textUri" />
-    </com.google.android.material.textfield.TextInputLayout>
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="1dp">
 
-    <Button
-        android:id="@+id/btnSave"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Save Webhook URL"
-        android:layout_marginBottom="16dp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
 
-    <Button
-        android:id="@+id/btnGrantPermission"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Grant Notification Access"
-        android:layout_marginBottom="16dp" />
+                <TextView
+                    android:id="@+id/txtPermissionStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Notification access: checking..."
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/btnStartService"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Start Service"
-        android:layout_marginBottom="8dp" />
+                <TextView
+                    android:id="@+id/txtServiceStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Capture service: checking..."
+                    android:textSize="14sp" />
 
-    <Button
-        android:id="@+id/btnStopService"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Stop Service"
-        android:layout_marginBottom="24dp" />
+                <TextView
+                    android:id="@+id/txtQueueStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Queued notifications: 0"
+                    android:textSize="14sp" />
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Note: You must grant Notification Access for this app to work. This allows it to capture all notifications and forward them to your n8n instance."
-        android:textSize="12sp"
-        android:alpha="0.7" />
+                <TextView
+                    android:id="@+id/txtLastDelivery"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Last delivery: nothing sent yet"
+                    android:textSize="12sp"
+                    android:alpha="0.8" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
-</LinearLayout>
+        <!-- ================= CONFIG ================= -->
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:hint="n8n base URL">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editBaseUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:hint="Notification webhook path">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editNotificationPath"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:hint="Assistant (ask) webhook path">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editAskPath"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:hint="Auth token (optional)">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editAuthToken"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:hint="Auth header name">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editAuthHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:hint="Apps to ignore (comma separated package names)">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editBlocklist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchCapture"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="Capture notifications" />
+
+        <!-- ================= ACTIONS ================= -->
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Save settings" />
+
+        <Button
+            android:id="@+id/btnTest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Test connection to n8n" />
+
+        <TextView
+            android:id="@+id/txtTestResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="10dp"
+            android:alpha="0.8"
+            android:textIsSelectable="true"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnGrantPermission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Grant notification access" />
+
+        <Button
+            android:id="@+id/btnStartService"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Start capture service" />
+
+        <Button
+            android:id="@+id/btnStopService"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Stop capture service" />
+
+        <Button
+            android:id="@+id/btnSync"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Sync queued notifications now" />
+
+        <Button
+            android:id="@+id/btnAsk"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Ask your assistant" />
+
+        <Button
+            android:id="@+id/btnClearQueue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Clear queue" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:alpha="0.7"
+            android:text="Notification access lets this app read notifications posted by other apps on this device. Captured data is only sent to the n8n URL you configure above, and stays in the on-device queue until it is accepted."
+            android:textSize="12sp" />
+
+    </LinearLayout>
+</ScrollView>

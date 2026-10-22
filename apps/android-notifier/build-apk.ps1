@@ -77,10 +77,15 @@ $apk = if ($Release) {
 
 if (Test-Path $apk) {
     $size = [math]::Round((Get-Item $apk).Length / 1MB, 2)
+    $friendly = Join-Path $Root "BonjeeNotifier.apk"
+    Copy-Item -Path $apk -Destination $friendly -Force
     Write-Host ""
     Write-Host "[build] SUCCESS" -ForegroundColor Green
     Write-Host "[build] APK: $apk ($size MB)" -ForegroundColor Green
-    Write-Host "[build] Copy it to your phone and install it (enable 'unknown sources')." -ForegroundColor Green
+    Write-Host "[build] Copy to send to your phone: $friendly" -ForegroundColor Green
+    Write-Host "[build] Transfer it to the phone (USB, Google Drive, or send it to yourself)," -ForegroundColor Green
+    Write-Host "[build] then tap it on the phone and allow 'install unknown apps'." -ForegroundColor Green
+    try { Start-Process explorer.exe -ArgumentList "/select,`"$friendly`"" } catch { }
 } else {
     Write-Host "[build] Finished but APK not found at $apk" -ForegroundColor Yellow
     exit 1

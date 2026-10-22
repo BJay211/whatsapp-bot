@@ -44,7 +44,7 @@ class NotificationListener : NotificationListenerService() {
         // Try to deliver right away; anything left behind is retried later.
         CoroutineScope(Dispatchers.IO).launch {
             QueueDrainer.drain(applicationContext)
-            updateForegroundStatus(applicationContext)
+            ForegroundService.updateForegroundStatus(applicationContext)
         }
     }
 

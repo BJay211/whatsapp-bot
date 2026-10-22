@@ -33,7 +33,15 @@ class ForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification("Starting up..."))
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification("Starting up..."))
+        } catch (e: Exception) {
+            // Android 12+ can refuse a foreground start from the background.
+            // Fail quietly instead of crashing the whole app.
+            android.util.Log.w("BonjeeService", "startForeground refused: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         startDrainLoop()
         return START_STICKY
     }

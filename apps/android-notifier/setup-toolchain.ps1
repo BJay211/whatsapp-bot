@@ -43,13 +43,26 @@ $assets = @(
     @{ Name = "gradle.zip";   Url = "https://services.gradle.org/distributions/gradle-8.7-bin.zip" }
 )
 
-$expectedMB = @{ "jdk17.zip" = 180; "cmdtools.zip" = 130; "gradle.zip" = 128 }
+$expectedMB = @{ "jdk17.zip" = 180; "cmdtools.zip" = 147; "gradle.zip" = 128 }
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+# A truncated zip still "exists", so size alone is not proof of a good download.
+function Test-ZipOk($path) {
+    if (-not (Test-Path $path)) { return $false }
+    try {
+        $z = [System.IO.Compression.ZipFile]::OpenRead($path)
+        $n = $z.Entries.Count
+        $z.Dispose()
+        return ($n -gt 0)
+    } catch { return $false }
+}
 
 foreach ($a in $assets) {
     $target = Join-Path $Downloads $a.Name
     $minBytes = ($expectedMB[$a.Name] - 5) * 1MB
 
-    if ((Test-Path $target) -and ((Get-Item $target).Length -ge $minBytes)) {
+    if ((Test-Path $target) -and ((Get-Item $target).Length -ge $minBytes) -and (Test-ZipOk $target)) {
         Say "$($a.Name) already complete ($([math]::Round((Get-Item $target).Length/1MB,1)) MB)"
         continue
     }
@@ -62,13 +75,22 @@ foreach ($a in $assets) {
             --max-time 3600 -C - -o $target $a.Url
         $code = $LASTEXITCODE
         $size = if (Test-Path $target) { (Get-Item $target).Length } else { 0 }
-        if ($code -eq 0 -and $size -ge $minBytes) { break }
+        if ($code -eq 0 -and $size -ge $minBytes -and (Test-ZipOk $target)) { break }
+
         Say "  attempt $attempt incomplete (curl=$code, $([math]::Round($size/1MB,1)) MB) - retrying"
+        # If a server ignored the Range request, curl appended a full copy and the
+        # archive is now unusable. Drop it so the next attempt starts from zero.
+        if (Test-Path $target) {
+            if (-not (Test-ZipOk $target)) {
+                Remove-Item $target -Force -ErrorAction SilentlyContinue
+                Say "  archive was corrupt - restarting this download from zero"
+            }
+        }
         Start-Sleep -Seconds 5
     }
 
-    if (-not (Test-Path $target) -or (Get-Item $target).Length -lt $minBytes) {
-        Fail "Could not download $($a.Name). Check the connection and re-run."
+    if (-not (Test-Path $target) -or (Get-Item $target).Length -lt $minBytes -or -not (Test-ZipOk $target)) {
+        Fail "Could not download a valid $($a.Name). Check the connection and re-run."
     }
     Say "$($a.Name) done ($([math]::Round((Get-Item $target).Length/1MB,1)) MB)"
 }

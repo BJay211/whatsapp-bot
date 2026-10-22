@@ -27,3 +27,7 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+
+# Cloud CI file is kept locally; the PAT used here has no 'workflow' scope.
+# Add it through the GitHub web UI when you want cloud builds.
+.github/

@@ -1,149 +1,471 @@
 {
-  "name": "Bonjee Bot - Complete System",
+  "name": "Bonjee Bot",
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "POST",
-        "path": "bonjee-webhook",
-        "responseMode": "responseNode",
-        "options": {
-          "allowedOrigins": "*"
-        }
+        "content": "## Bonjee Bot — single importable workflow\n\n### Entry points (activate the workflow to use them)\n| Method | Path | Used by |\n|---|---|---|\n| POST | `/webhook/personal-ai-whatsapp` | Evolution API (WhatsApp) |\n| POST | `/webhook/notifications-ingest` | Android app |\n| POST | `/webhook/personal-ai-ask` | Android app / browser |\n| GET | `/webhook/health` | uptime checks |\n\n### Before activating\n1. Run `db/schema.sql` against the `bonjee-db` database.\n2. Create a **Postgres** credential and select it on all 3 Postgres nodes\n   (`Save WhatsApp Message`, `Save Notification`, `Search Message Memory`, `Health Database`).\n3. Point Evolution API at `/webhook/personal-ai-whatsapp` with `MESSAGES_UPSERT` enabled.\n4. In the Android app use base `https://bonjee-n8n.onrender.com`, path\n   `/webhook/notifications-ingest`, ask path `/webhook/personal-ai-ask`.\n\n### Notes\n* Full text search uses the `simple` dictionary so course codes like `CSC401` match.\n* Nothing here calls an LLM, so it works with zero AI credentials and costs nothing.\n* Add your own LLM node after `Format Evidence` when you are ready for synthesised answers.",
+        "height": 460,
+        "width": 460,
+        "color": 4
       },
-      "name": "Evolution API Webhook",
-      "type": "n8n-nodes-base.webhook",
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000001",
+      "name": "Read Me",
+      "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -800,
-        300
-      ],
-      "webhookId": "bonjee-evolution-webhook"
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "notifications-ingest",
-        "responseMode": "responseNode",
-        "options": {
-          "allowedOrigins": "*",
-          "rawBody": true
-        }
-      },
-      "name": "Android Notifications Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [
-        -800,
-        500
-      ],
-      "webhookId": "bonjee-notifications-webhook"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Enhanced Evolution API webhook normalization\nconst body = $input.first().json;\n\nlet event = body;\nif (body.body) event = body.body;\nif (body.data && typeof body.data === 'object') event = body.data;\n\nconst eventType = event.event || body.event || 'unknown';\n\n// Only process message events\nif (eventType !== 'messages.upsert' && eventType !== 'MESSAGES_UPSERT' && !eventType.includes('message')) {\n  return { skip: true, reason: 'not_message_event' };\n}\n\nconst data = event.data || event.message || event;\nconst key = data.key || data;\n\nconst messageId = key.id || data.id || data.external_id || require('crypto').randomUUID();\nconst remoteJid = key.remoteJid || data.remoteJid || data.from || '';\nconst isGroup = remoteJid.includes('@g.us');\nconst fromMe = key.fromMe || data.fromMe || false;\n\n// Extract message content with support for various types\nlet content = '';\nlet messageType = 'text';\nlet hasMedia = false;\n\nif (data.message?.conversation) {\n  content = data.message.conversation;\n  messageType = 'text';\n} else if (data.message?.extendedTextMessage?.text) {\n  content = data.message.extendedTextMessage.text;\n  messageType = 'text';\n} else if (data.message?.imageMessage) {\n  content = data.message.imageMessage.caption || '[Image]';\n  messageType = 'image';\n  hasMedia = true;\n} else if (data.message?.videoMessage) {\n  content = data.message.videoMessage.caption || '[Video]';\n  messageType = 'video';\n  hasMedia = true;\n} else if (data.message?.audioMessage) {\n  content = '[Audio/Voice Note]';\n  messageType = 'audio';\n  hasMedia = true;\n} else if (data.message?.documentMessage) {\n  content = data.message.documentMessage.caption || '[Document: ' + (data.message.documentMessage.fileName || 'file') + ']';\n  messageType = 'document';\n  hasMedia = true;\n} else if (data.body) {\n  content = data.body;\n  messageType = 'text';\n}\n\n// Check if mentioned me\nconst mentionedMe = content.toLowerCase().includes('@me') || \n                    content.toLowerCase().match(/\\b(me|you)\\b/i) || \n                    content.includes('@');\n\nconst timestamp = data.messageTimestamp \n  ? new Date(data.messageTimestamp * 1000).toISOString()\n  : data.timestamp \n    ? new Date(data.timestamp).toISOString()\n    : new Date().toISOString();\n\nreturn {\n  skip: false,\n  external_id: messageId,\n  source: 'whatsapp',\n  chat_id: remoteJid,\n  chat_name: data.pushName || (isGroup ? remoteJid.split('@')[0] : remoteJid.split('@')[0]),\n  is_group: isGroup,\n  sender_id: data.key?.participant || remoteJid,\n  sender_name: data.pushName || data.senderName || '',\n  message_type: messageType,\n  content: content,\n  has_media: hasMedia,\n  mentioned_me: !!mentionedMe,\n  timestamp: timestamp,\n  raw_payload: event,\n  from_me: fromMe,\n  instance_id: data.instanceId || event.instanceId || 'default'\n};"
-      },
-      "name": "Normalize WhatsApp Message",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
-      "position": [
-        -580,
-        300
+        -1060,
+        -180
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Normalize Android notification\nconst body = $input.first().json;\n\nlet data = body;\nif (body.body) {\n  try { \n    data = typeof body.body === 'string' ? JSON.parse(body.body) : body.body; \n  } catch (e) { \n    data = body; \n  }\n}\n\nconst externalId = data.external_id || `${data.app_package}_${data.post_time || Date.now()}_${Math.random().toString(36).substr(2,9)}`;\n\nreturn {\n  external_id: externalId,\n  app_package: data.app_package || 'unknown',\n  app_name: data.app_name || data.app_package || 'Unknown App',\n  title: data.title || '',\n  content: data.content || data.text || '',\n  ticker: data.ticker || '',\n  post_time: data.post_time ? new Date(data.post_time).toISOString() : new Date().toISOString(),\n  is_clearable: data.is_clearable !== false,\n  category: data.category || '',\n  raw_payload: data\n};"
+        "content": "### WhatsApp Ingestion\nThe normalizer accepts the Evolution API v2 `messages.upsert` shape and tolerates\npayloads wrapped in `body`/`data`. Non-message events (qrcode, connection.update,\npresence) are acknowledged and skipped.\n\nSet the Evolution webhook URL to:\n`https://YOUR-N8N.onrender.com/webhook/personal-ai-whatsapp`",
+        "height": 200,
+        "width": 340,
+        "color": 5
       },
-      "name": "Normalize Notification",
-      "type": "n8n-nodes-base.function",
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000002",
+      "name": "WhatsApp Note",
+      "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -580,
-        500
+        -560,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Android Notifications\nAccepts the payload produced by the Bonjee Notifier app:\nexternal_id, app_package, app_name, title, content, ticker,\npost_time, is_clearable, category, raw_payload.\n\nApp webhook:\n`https://YOUR-N8N.onrender.com/webhook/notifications-ingest`",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000003",
+      "name": "Android Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        300
+      ]
+    },
+
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "personal-ai-whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000010",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        0
+      ],
+      "webhookId": "b0a1f111-1111-4a1a-9b1b-000000000010"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalise an Evolution API v2 webhook into the Bonjee message schema.\n// Returns { valid: false, reason } for anything we do not want to store.\n\nconst input = $input.first().json ?? {};\nconst root = input.body ?? input;\n\nconst rawEvent = root.event ?? root.type ?? '';\nconst event = String(rawEvent).toLowerCase();\n\n// Evolution emits connection.update, qrcode.updated, presence.update, ...\nif (!event.includes('messages.upsert') && !event.includes('messages_upsert')) {\n  return [{ json: { valid: false, reason: 'ignored_event:' + (rawEvent || 'unknown') } }];\n}\n\nconst data = root.data ?? {};\nconst key = data.key ?? {};\n\nconst externalId = key.id ?? data.id ?? '';\nconst remoteJid = key.remoteJid ?? data.remoteJid ?? '';\nconst fromMe = key.fromMe === true || data.fromMe === true;\nconst isGroup = String(remoteJid).endsWith('@g.us');\nconst senderId = key.participant ?? data.participant ?? remoteJid;\n\nif (!externalId || !remoteJid) {\n  return [{ json: { valid: false, reason: 'missing_id_or_chat' } }];\n}\n\n// Revoked / deleted messages arrive as protocolMessage with no content.\nconst message = data.message ?? {};\nif (message.protocolMessage || message.senderKeyDistributionMessage) {\n  return [{ json: { valid: false, reason: 'protocol_message', external_id: externalId } }];\n}\n\nfunction textOf(m) {\n  if (!m || typeof m !== 'object') return '';\n  return (\n    m.conversation ??\n    m.extendedTextMessage?.text ??\n    m.imageMessage?.caption ??\n    m.videoMessage?.caption ??\n    m.documentMessage?.caption ??\n    m.documentMessage?.fileName ??\n    m.audioMessage?.caption ??\n    m.buttonsResponseMessage?.selectedDisplayText ??\n    m.listResponseMessage?.title ??\n    m.templateButtonReplyMessage?.selectedDisplayText ??\n    m.contactMessage?.displayName ??\n    m.locationMessage?.name ??\n    ''\n  );\n}\n\nfunction typeOf(m) {\n  if (!m || typeof m !== 'object') return 'unknown';\n  if (m.conversation || m.extendedTextMessage) return 'text';\n  if (m.imageMessage) return 'image';\n  if (m.videoMessage) return 'video';\n  if (m.audioMessage) return 'audio';\n  if (m.documentMessage) return 'document';\n  if (m.stickerMessage) return 'sticker';\n  if (m.locationMessage) return 'location';\n  if (m.contactMessage) return 'contact';\n  return 'other';\n}\n\nconst messageType = typeOf(message);\nconst content = String(textOf(message) || '');\n\n// Nothing textual and no media reference: nothing useful to store.\nif (!content && ['unknown', 'other'].includes(messageType)) {\n  return [{ json: { valid: false, reason: 'empty_message', external_id: externalId } }];\n}\n\nconst tsRaw = data.messageTimestamp ?? data.timestamp ?? Date.now();\nlet tsMs;\nif (typeof tsRaw === 'number' || /^\\d+$/.test(String(tsRaw))) {\n  const n = Number(tsRaw);\n  tsMs = n < 1e12 ? n * 1000 : n;\n} else {\n  tsMs = Date.parse(String(tsRaw));\n  if (Number.isNaN(tsMs)) tsMs = Date.now();\n}\n\nconst chatName = isGroup\n  ? (data.groupName ?? String(remoteJid).split('@')[0])\n  : (data.pushName ?? String(remoteJid).split('@')[0]);\n\nreturn [{\n  json: {\n    valid: true,\n    external_id: String(externalId),\n    source: 'whatsapp',\n    chat_id: String(remoteJid),\n    chat_name: String(chatName),\n    is_group: isGroup,\n    sender_id: String(senderId),\n    sender_name: String(data.pushName ?? ''),\n    message_type: messageType,\n    content: content,\n    has_media: ['image', 'video', 'audio', 'document', 'sticker'].includes(messageType),\n    mentioned_me: content.includes('@') || /\\b(me|you)\\b/i.test(content),\n    from_me: fromMe,\n    timestamp: new Date(tsMs).toISOString(),\n    instance: String(root.instance ?? data.instance ?? ''),\n    raw_payload: root\n  }\n}];"
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000011",
+      "name": "Normalize WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        0
       ]
     },
     {
       "parameters": {
         "conditions": {
-          "boolean": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
             {
-              "value1": "={{$json.skip}}",
-              "value2": true
+              "id": "c0000001-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c0000001-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.from_me }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
             }
-          ]
-        }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
-      "name": "Should Skip?",
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000012",
+      "name": "Store This Message?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "typeVersion": 2.2,
       "position": [
-        -380,
-        300
+        300,
+        0
       ]
     },
     {
       "parameters": {
-        "operation": "insert",
-        "table": "messages",
-        "columns": "external_id, source, chat_id, chat_name, is_group, sender_id, sender_name, message_type, content, has_media, mentioned_me, timestamp, raw_payload",
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (external_id, source, chat_id, chat_name, is_group, sender_id, sender_name, message_type, content, has_media, mentioned_me, timestamp, raw_payload)\nVALUES ($1, $2, $3, $4, $5::boolean, $6, $7, $8, $9, $10::boolean, $11::boolean, $12::timestamptz, $13::jsonb)\nON CONFLICT (external_id) DO UPDATE\n  SET content = COALESCE(NULLIF(EXCLUDED.content, ''), messages.content),\n      raw_payload = EXCLUDED.raw_payload\nRETURNING id, external_id, chat_name, message_type, timestamp;",
         "options": {
-          "onConflict": "external_id"
+          "queryReplacement": "={{ [$json.external_id, $json.source, $json.chat_id, $json.chat_name, $json.is_group, $json.sender_id, $json.sender_name, $json.message_type, $json.content, $json.has_media, $json.mentioned_me, $json.timestamp, JSON.stringify($json.raw_payload)] }}"
         }
       },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000013",
       "name": "Save WhatsApp Message",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2,
+      "typeVersion": 2.5,
       "position": [
-        -180,
-        200
+        560,
+        -110
       ],
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "operation": "insert",
-        "table": "notifications",
-        "columns": "external_id, app_package, app_name, title, content, ticker, post_time, is_clearable, category, raw_payload",
-        "options": {
-          "onConflict": "external_id"
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Bonjee Postgres"
         }
       },
-      "name": "Save Notification",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2,
-      "position": [
-        -180,
-        500
-      ],
       "continueOnFail": true
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\"status\": \"ok\", \"message\": \"processed\"}",
-        "options": {}
+        "responseBody": "={{ { ok: true, stored: true, message: $json } }}",
+        "options": {
+          "responseCode": 200
+        }
       },
-      "name": "Respond OK",
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000014",
+      "name": "WhatsApp Stored",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "typeVersion": 1.4,
       "position": [
-        40,
-        300
+        800,
+        -110
       ]
     },
     {
       "parameters": {
-        "workflowId": "Bonjee - Context Summarizer"
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, stored: false, reason: $json.reason ?? 'filtered' } }}",
+        "options": {
+          "responseCode": 200
+        }
       },
-      "name": "Trigger Context Summarizer",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1,
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000015",
+      "name": "WhatsApp Skipped",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
       "position": [
-        40,
-        400
+        560,
+        140
+      ]
+    },
+
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notifications-ingest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000020",
+      "name": "Android Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        480
       ],
+      "webhookId": "b0a1f111-1111-4a1a-9b1b-000000000020"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalise a notification posted by the Bonjee Notifier Android app.\nconst input = $input.first().json ?? {};\n\n// The app posts a JSON object directly; n8n may also nest it under body.\nlet data = input.body ?? input;\nif (typeof data === 'string') {\n  try { data = JSON.parse(data); } catch (e) { data = input; }\n}\n\nconst appPackage = String(data.app_package ?? '').trim();\nif (!appPackage) {\n  return [{ json: { valid: false, reason: 'missing_app_package' } }];\n}\n\nconst externalId = String(\n  data.external_id ??\n  `${appPackage}_${data.post_time ?? Date.now()}_${data.id ?? ''}`\n);\n\nconst postTimeRaw = data.post_time ?? data.device_time ?? Date.now();\nlet postTimeMs;\nif (typeof postTimeRaw === 'number' || /^\\d+$/.test(String(postTimeRaw))) {\n  const n = Number(postTimeRaw);\n  postTimeMs = n < 1e12 ? n * 1000 : n;\n} else {\n  postTimeMs = Date.parse(String(postTimeRaw));\n  if (Number.isNaN(postTimeMs)) postTimeMs = Date.now();\n}\n\nconst content = String(\n  data.content ?? data.big_text ?? data.text ?? data.ticker ?? ''\n);\n\nreturn [{\n  json: {\n    valid: true,\n    external_id: externalId,\n    app_package: appPackage,\n    app_name: String(data.app_name ?? appPackage),\n    title: String(data.title ?? ''),\n    content: content,\n    ticker: String(data.ticker ?? ''),\n    post_time: new Date(postTimeMs).toISOString(),\n    is_clearable: data.is_clearable !== false,\n    category: String(data.category ?? ''),\n    raw_payload: data\n  }\n}];"
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000021",
+      "name": "Normalize Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000002-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000022",
+      "name": "Valid Notification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        300,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO notifications (external_id, app_package, app_name, title, content, ticker, post_time, is_clearable, category, raw_payload)\nVALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8::boolean, $9, $10::jsonb)\nON CONFLICT (external_id) DO UPDATE\n  SET title = COALESCE(NULLIF(EXCLUDED.title, ''), notifications.title),\n      content = COALESCE(NULLIF(EXCLUDED.content, ''), notifications.content)\nRETURNING id, external_id, app_name, title, post_time;",
+        "options": {
+          "queryReplacement": "={{ [$json.external_id, $json.app_package, $json.app_name, $json.title, $json.content, $json.ticker, $json.post_time, $json.is_clearable, $json.category, JSON.stringify($json.raw_payload)] }}"
+        }
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000023",
+      "name": "Save Notification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        560,
+        370
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Bonjee Postgres"
+        }
+      },
       "continueOnFail": true
     },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, stored: true, notification: $json } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000024",
+      "name": "Notification Stored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        800,
+        370
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, stored: false, error: $json.reason ?? 'invalid_notification' } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000025",
+      "name": "Notification Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        560,
+        620
+      ]
+    },
+
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "personal-ai-ask",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000030",
+      "name": "Ask Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        900
+      ],
+      "webhookId": "b0a1f111-1111-4a1a-9b1b-000000000030"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate the question and derive search terms.\nconst input = $input.first().json ?? {};\nconst body = input.body ?? input;\n\nconst question = String(body.question ?? body.q ?? body.query ?? '').trim();\n\nif (!question) {\n  return [{ json: { valid: false, reason: 'Question is required.' } }];\n}\nif (question.length > 4000) {\n  return [{ json: { valid: false, reason: 'Question is longer than 4000 characters.' } }];\n}\n\n// Strip punctuation so plainto_tsquery gets useful lexemes.\nconst terms = question\n  .replace(/[^\\p{L}\\p{N}\\s]/gu, ' ')\n  .split(/\\s+/)\n  .filter((w) => w.length > 2)\n  .slice(0, 12)\n  .join(' ');\n\nreturn [{\n  json: {\n    valid: true,\n    question: question,\n    search_terms: terms || question\n  }\n}];"
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000031",
+      "name": "Validate Question",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000003-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000032",
+      "name": "Question Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        300,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, chat_id, chat_name, sender_name, timestamp, message_type, content, FALSE AS from_notification\nFROM messages\nWHERE content IS NOT NULL\n  AND (\n    content ILIKE '%' || $1 || '%'\n    OR to_tsvector('simple', COALESCE(content, '')) @@ plainto_tsquery('simple', $1)\n  )\nORDER BY timestamp DESC\nLIMIT 15;",
+        "options": {
+          "queryReplacement": "={{ [$json.search_terms] }}"
+        }
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000033",
+      "name": "Search Messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        560,
+        790
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Bonjee Postgres"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, app_name, title, content, post_time AS timestamp, 'notification' AS source_kind\nFROM notifications\nWHERE content IS NOT NULL\n  AND (\n    content ILIKE '%' || $1 || '%'\n    OR to_tsvector('simple', COALESCE(content, '')) @@ plainto_tsquery('simple', $1)\n    OR title ILIKE '%' || $1 || '%'\n  )\nORDER BY post_time DESC\nLIMIT 10;",
+        "options": {
+          "queryReplacement": "={{ [$('Validate Question').first().json.search_terms] }}"
+        }
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000034",
+      "name": "Search Notifications",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        560,
+        1010
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Bonjee Postgres"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge evidence from messages + notifications into a grounded, honest answer.\n// No LLM is called: this is deterministic retrieval so it cannot hallucinate.\n\nconst question = $('Validate Question').first().json.question;\n\nlet messages = [];\ntry { messages = $('Search Messages').all().map((i) => i.json).filter((r) => r && r.content); } catch (e) { messages = []; }\n\nlet notifications = [];\ntry { notifications = $('Search Notifications').all().map((i) => i.json).filter((r) => r && (r.content || r.title)); } catch (e) { notifications = []; }\n\nconst evidence = [\n  ...messages.map((m) => ({\n    kind: 'message',\n    source: m.chat_name || m.chat_id,\n    sender: m.sender_name || '',\n    timestamp: m.timestamp,\n    text: m.content,\n    id: m.id\n  })),\n  ...notifications.map((n) => ({\n    kind: 'notification',\n    source: n.app_name,\n    sender: '',\n    timestamp: n.timestamp,\n    text: [n.title, n.content].filter(Boolean).join(' — '),\n    id: n.id\n  }))\n].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));\n\nconst hasEvidence = evidence.length > 0;\n\nreturn [{\n  json: {\n    ok: true,\n    question: question,\n    answer: hasEvidence\n      ? `Found ${evidence.length} archived item(s) matching your question. See supporting_messages below.`\n      : 'No archived message or notification matched this question. The assistant does not invent answers.',\n    current_answer: hasEvidence ? 'See supporting_messages.' : 'No matching evidence in the archive.',\n    supporting_messages: evidence.slice(0, 20),\n    changes_and_history: [],\n    uncertainty: hasEvidence\n      ? 'Keyword/lexical match only. Dates and corrections are not inferred. Enable the AI branch for synthesis.'\n      : 'Nothing matched. Try different words, or check that ingestion is running.',\n    suggested_next_action: hasEvidence\n      ? 'Open the referenced message to confirm before acting on it.'\n      : 'Send a test message and confirm it appears in the messages table.',\n    evidence_count: evidence.length\n  }\n}];"
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000035",
+      "name": "Format Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000036",
+      "name": "Answer",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1060,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: $json.reason ?? 'Invalid question' } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000037",
+      "name": "Question Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        560,
+        1220
+      ]
+    },
+
     {
       "parameters": {
         "httpMethod": "GET",
@@ -151,87 +473,104 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "name": "Health Check",
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000040",
+      "name": "Health Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [
-        -800,
-        100
+        -180,
+        1420
       ],
-      "webhookId": "bonjee-health"
+      "webhookId": "b0a1f111-1111-4a1a-9b1b-000000000040"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT NOW() AS server_time,\n       (SELECT COUNT(*) FROM messages) AS message_count,\n       (SELECT COUNT(*) FROM notifications) AS notification_count;",
+        "options": {}
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000041",
+      "name": "Health Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        60,
+        1420
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Bonjee Postgres"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Report honestly: healthy only when the database answered.\nconst row = $input.first()?.json ?? {};\nconst dbOk = Boolean(row.server_time) && !row.error;\n\nreturn [{\n  json: {\n    ok: dbOk,\n    status: dbOk ? 'healthy' : 'degraded',\n    service: 'bonjee-bot',\n    checked_at: new Date().toISOString(),\n    database: dbOk ? 'reachable' : 'unreachable',\n    server_time: row.server_time ?? null,\n    message_count: row.message_count ?? null,\n    notification_count: row.notification_count ?? null\n  }\n}];"
+      },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000042",
+      "name": "Health Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        1420
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\"status\": \"healthy\", \"service\": \"bonjee-bot\", \"timestamp\": \"{{$now.toISO()}}\"}",
-        "options": {}
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
       },
+      "id": "d0a1b2c3-0001-4a1a-9b1b-000000000043",
       "name": "Health Response",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "typeVersion": 1.4,
       "position": [
-        -580,
-        100
+        580,
+        1420
       ]
     }
   ],
   "connections": {
-    "Evolution API Webhook": {
+    "WhatsApp Webhook": {
       "main": [
         [
           {
-            "node": "Normalize WhatsApp Message",
+            "node": "Normalize WhatsApp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Android Notifications Webhook": {
+    "Normalize WhatsApp": {
       "main": [
         [
           {
-            "node": "Normalize Notification",
+            "node": "Store This Message?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalize WhatsApp Message": {
+    "Store This Message?": {
       "main": [
         [
           {
-            "node": "Should Skip?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalize Notification": {
-      "main": [
-        [
-          {
-            "node": "Save Notification",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Should Skip?": {
-      "main": [
-        [
-          {
-            "node": "Respond OK",
+            "node": "Save WhatsApp Message",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Save WhatsApp Message",
+            "node": "WhatsApp Skipped",
             "type": "main",
             "index": 0
           }
@@ -242,12 +581,47 @@
       "main": [
         [
           {
-            "node": "Respond OK",
+            "node": "WhatsApp Stored",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Android Webhook": {
+      "main": [
+        [
           {
-            "node": "Trigger Context Summarizer",
+            "node": "Normalize Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Notification": {
+      "main": [
+        [
+          {
+            "node": "Valid Notification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Notification?": {
+      "main": [
+        [
+          {
+            "node": "Save Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notification Rejected",
             "type": "main",
             "index": 0
           }
@@ -258,19 +632,109 @@
       "main": [
         [
           {
-            "node": "Respond OK",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Trigger Context Summarizer",
+            "node": "Notification Stored",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Health Check": {
+    "Ask Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Question": {
+      "main": [
+        [
+          {
+            "node": "Question Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question Valid?": {
+      "main": [
+        [
+          {
+            "node": "Search Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Question Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Messages": {
+      "main": [
+        [
+          {
+            "node": "Search Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Notifications": {
+      "main": [
+        [
+          {
+            "node": "Format Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Evidence": {
+      "main": [
+        [
+          {
+            "node": "Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Webhook": {
+      "main": [
+        [
+          {
+            "node": "Health Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Database": {
+      "main": [
+        [
+          {
+            "node": "Health Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Report": {
       "main": [
         [
           {
@@ -282,14 +746,17 @@
       ]
     }
   },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Lagos",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  },
   "active": false,
-  "settings": {},
-  "versionId": "1",
-  "id": "BonjeeBotComplete",
-  "tags": [
-    {
-      "name": "bonjee",
-      "id": "bonjee-tag"
-    }
-  ]
+  "pinData": {},
+  "versionId": "6f0d1c22-1111-4a1a-9b1b-0000000000ff",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
 }

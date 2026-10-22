@@ -34,16 +34,33 @@ $assets = @(
     @{ Name = "gradle.zip";   Url = "https://services.gradle.org/distributions/gradle-8.7-bin.zip" }
 )
 
+$expectedMB = @{ "jdk17.zip" = 180; "cmdtools.zip" = 130; "gradle.zip" = 128 }
+
 foreach ($a in $assets) {
     $target = Join-Path $Downloads $a.Name
-    if (Test-Path $target) {
-        Say "$($a.Name) already downloaded ($([math]::Round((Get-Item $target).Length/1MB,1)) MB)"
-    } else {
-        Say "Downloading $($a.Name) ..."
-        $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest -Uri $a.Url -OutFile $target -UseBasicParsing -TimeoutSec 1800
-        Say "$($a.Name) done ($([math]::Round((Get-Item $target).Length/1MB,1)) MB)"
+    $minBytes = ($expectedMB[$a.Name] - 5) * 1MB
+
+    if ((Test-Path $target) -and ((Get-Item $target).Length -ge $minBytes)) {
+        Say "$($a.Name) already complete ($([math]::Round((Get-Item $target).Length/1MB,1)) MB)"
+        continue
     }
+
+    Say "Downloading $($a.Name) (resumable, this can take a while on a slow link) ..."
+    # curl.exe supports resume + retries, which Invoke-WebRequest does not do well.
+    for ($attempt = 1; $attempt -le 8; $attempt++) {
+        & curl.exe -L --fail --retry 3 --retry-delay 3 --connect-timeout 30 `
+            --max-time 3600 -C - -o $target $a.Url
+        $code = $LASTEXITCODE
+        $size = if (Test-Path $target) { (Get-Item $target).Length } else { 0 }
+        if ($code -eq 0 -and $size -ge $minBytes) { break }
+        Say "  attempt $attempt incomplete (curl=$code, $([math]::Round($size/1MB,1)) MB) - retrying"
+        Start-Sleep -Seconds 5
+    }
+
+    if (-not (Test-Path $target) -or (Get-Item $target).Length -lt $minBytes) {
+        Fail "Could not download $($a.Name). Check the connection and re-run."
+    }
+    Say "$($a.Name) done ($([math]::Round((Get-Item $target).Length/1MB,1)) MB)"
 }
 
 # ------------------------------------------------------------------------- JDK

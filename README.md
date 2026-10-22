@@ -1,8 +1,8 @@
 # Bonjee Bot
 
-A personal assistant that pulls all of your Android notifications and your personal WhatsApp (DMs + Groups), classifies them by context, and gives you brief summaries with deadlines and action items. 
+A personal assistant that pulls all of your Android notifications and your personal WhatsApp (DMs + Groups), classifies them by context, and gives you brief summaries with deadlines and action items.
 
-Built to run on [Render](https://render.com/) with n8n, Evolution API, Postgres and a Next.js dashboard. 
+Built to run on [Render](https://render.com/) with n8n, Evolution API, Postgres and a Next.js dashboard.
 
 ## Goals
 - Access all Android notifications via a custom NotificationListenerService
@@ -18,7 +18,92 @@ Built to run on [Render](https://render.com/) with n8n, Evolution API, Postgres 
 - [Kotlin Android App](./apps/android-notifier) - Notification listener that forwards to n8n
 - [Next.js Dashboard](./apps/dashboard) - View briefs and settings
 
-## Getting Started
-See [docs/SETUP_RENDER.md](./docs/SETUP_RENDER.md) for deployment to Render and [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for a deeper dive. 
+---
 
-> Note: Using unofficial WhatsApp APIs can be against WhatsApp's ToS. Only use with your personal account and at your own risk. 
+## Quick start (what actually works today)
+
+### 1. n8n: import one workflow
+
+File: **`Bonjee_bot.json`** (repo root)
+
+1. Open `https://bonjee-n8n.onrender.com` and create the owner account if you have not.
+2. **Workflows -> Import from File -> Bonjee_bot.json**.
+3. Open the **Postgres** credential field on these four nodes and pick your saved
+   `bonjee-db` credential:
+   - `Save WhatsApp Message`
+   - `Save Notification`
+   - `Search Messages`
+   - `Search Notifications`
+   - `Health Database`
+4. **Save**, then toggle the workflow **Active**.
+
+### 2. Webhook URLs
+
+| Method | URL | Used by |
+|---|---|---|
+| POST | `https://bonjee-n8n.onrender.com/webhook/personal-ai-whatsapp` | Evolution API |
+| POST | `https://bonjee-n8n.onrender.com/webhook/notifications-ingest` | Android app |
+| POST | `https://bonjee-n8n.onrender.com/webhook/personal-ai-ask` | Android app / browser |
+| GET | `https://bonjee-n8n.onrender.com/webhook/health` | uptime checks |
+
+Verify with a browser:
+
+```
+https://bonjee-n8n.onrender.com/webhook/health
+```
+
+A healthy reply looks like:
+
+```json
+{"ok":true,"status":"healthy","service":"bonjee-bot","database":"reachable","message_count":0,"notification_count":0}
+```
+
+### 3. Database
+
+Run [`db/schema.sql`](./db/schema.sql) once against the `bonjee-db` database
+(TablePlus / DBeaver / pgAdmin using the **External** Database URL from Render).
+The workflow needs the `messages` and `notifications` tables.
+
+### 4. Android app
+
+See [`apps/android-notifier/README.md`](./apps/android-notifier/README.md).
+
+```powershell
+cd "apps\android-notifier"
+powershell -ExecutionPolicy Bypass -File setup-toolchain.ps1   # one time
+powershell -ExecutionPolicy Bypass -File build-apk.ps1
+```
+
+The APK lands in `apps\android-notifier\app\build\outputs\apk\debug\app-debug.apk`.
+Copy it to your phone, install it, then:
+
+1. Base URL: `https://bonjee-n8n.onrender.com`
+2. Notification path: `/webhook/notifications-ingest`
+3. Ask path: `/webhook/personal-ai-ask`
+4. **Save settings -> Test connection -> Grant notification access -> Start capture service**
+
+No Android Studio is required anywhere in that flow.
+
+### 5. WhatsApp (Evolution API)
+
+Point the instance webhook at
+`https://bonjee-n8n.onrender.com/webhook/personal-ai-whatsapp`
+and enable the `MESSAGES_UPSERT` event.
+
+---
+
+## Validate workflows before importing
+
+```powershell
+node tests/n8n/validate_workflows.mjs
+```
+
+It checks JSON validity, node types, duplicate names/ids, broken connections,
+duplicate webhook paths, unsafe SQL interpolation and hardcoded secrets.
+
+## Docs
+
+- [docs/SETUP_RENDER.md](./docs/SETUP_RENDER.md) - deployment to Render
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - design notes
+
+> Note: Using unofficial WhatsApp APIs can be against WhatsApp's ToS. Only use with your personal account and at your own risk.

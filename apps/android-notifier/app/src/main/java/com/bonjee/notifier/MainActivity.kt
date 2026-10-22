@@ -203,11 +203,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun isServiceRunning(): Boolean {
-        val manager = getSystemService(android.app.ActivityManager::class.java)
-        val process = manager?.runningAppProcesses ?: return false
-        return process.any { it.processName == packageName }
-    }
+    private fun isServiceRunning(): Boolean = ForegroundService.isRunning
 
     private fun askForNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

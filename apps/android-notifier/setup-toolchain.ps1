@@ -49,6 +49,7 @@ foreach ($a in $assets) {
     # curl.exe supports resume + retries, which Invoke-WebRequest does not do well.
     for ($attempt = 1; $attempt -le 8; $attempt++) {
         & curl.exe -L --fail --retry 3 --retry-delay 3 --connect-timeout 30 `
+            --speed-limit 2048 --speed-time 90 `
             --max-time 3600 -C - -o $target $a.Url
         $code = $LASTEXITCODE
         $size = if (Test-Path $target) { (Get-Item $target).Length } else { 0 }

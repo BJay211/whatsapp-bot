@@ -15,54 +15,78 @@ class Prefs private constructor(context: Context) {
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
     var n8nBaseUrl: String
-        get() = sp.getString(KEY_BASE_URL, BuildConfig.DEFAULT_N8N_BASE_URL)!!
-        set(v) = sp.edit().putString(KEY_BASE_URL, cleanBase(v)).apply()
+        get() = sp.getString(KEY_BASE_URL, BuildConfig.DEFAULT_N8N_BASE_URL) ?: BuildConfig.DEFAULT_N8N_BASE_URL
+        set(value) {
+            sp.edit().putString(KEY_BASE_URL, cleanBase(value)).apply()
+        }
 
     var notificationPath: String
-        get() = sp.getString(KEY_NOTIF_PATH, BuildConfig.DEFAULT_NOTIFICATION_PATH)!!
-        set(v) = sp.edit().putString(KEY_NOTIF_PATH, normalisePath(v)).apply()
+        get() = sp.getString(KEY_NOTIF_PATH, BuildConfig.DEFAULT_NOTIFICATION_PATH)
+            ?: BuildConfig.DEFAULT_NOTIFICATION_PATH
+        set(value) {
+            sp.edit().putString(KEY_NOTIF_PATH, normalisePath(value)).apply()
+        }
 
     var askPath: String
-        get() = sp.getString(KEY_ASK_PATH, BuildConfig.DEFAULT_ASK_PATH)!!
-        set(v) = sp.edit().putString(KEY_ASK_PATH, normalisePath(v)).apply()
+        get() = sp.getString(KEY_ASK_PATH, BuildConfig.DEFAULT_ASK_PATH) ?: BuildConfig.DEFAULT_ASK_PATH
+        set(value) {
+            sp.edit().putString(KEY_ASK_PATH, normalisePath(value)).apply()
+        }
 
     var healthPath: String
-        get() = sp.getString(KEY_HEALTH_PATH, DEFAULT_HEALTH_PATH)!!
-        set(v) = sp.edit().putString(KEY_HEALTH_PATH, normalisePath(v)).apply()
+        get() = sp.getString(KEY_HEALTH_PATH, DEFAULT_HEALTH_PATH) ?: DEFAULT_HEALTH_PATH
+        set(value) {
+            sp.edit().putString(KEY_HEALTH_PATH, normalisePath(value)).apply()
+        }
 
     /** Optional bearer/header token sent on every outbound request. */
     var authToken: String
-        get() = sp.getString(KEY_AUTH_TOKEN, "")!!
-        set(v) = sp.edit().putString(KEY_AUTH_TOKEN, v.trim()).apply()
+        get() = sp.getString(KEY_AUTH_TOKEN, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_AUTH_TOKEN, value.trim()).apply()
+        }
 
     var authHeaderName: String
-        get() = sp.getString(KEY_AUTH_HEADER, DEFAULT_AUTH_HEADER)!!
-        set(v) = sp.edit().putString(KEY_AUTH_HEADER, v.trim().ifEmpty { DEFAULT_AUTH_HEADER }).apply()
+        get() = sp.getString(KEY_AUTH_HEADER, DEFAULT_AUTH_HEADER) ?: DEFAULT_AUTH_HEADER
+        set(value) {
+            val name = value.trim().ifEmpty { DEFAULT_AUTH_HEADER }
+            sp.edit().putString(KEY_AUTH_HEADER, name).apply()
+        }
 
     var captureEnabled: Boolean
         get() = sp.getBoolean(KEY_CAPTURE_ENABLED, true)
-        set(v) = sp.edit().putBoolean(KEY_CAPTURE_ENABLED, v).apply()
+        set(value) {
+            sp.edit().putBoolean(KEY_CAPTURE_ENABLED, value).apply()
+        }
 
     var lastDeliveryOk: Boolean
         get() = sp.getBoolean(KEY_LAST_OK, false)
-        set(v) = sp.edit().putBoolean(KEY_LAST_OK, v).apply()
+        set(value) {
+            sp.edit().putBoolean(KEY_LAST_OK, value).apply()
+        }
 
     var lastDeliveryAt: Long
         get() = sp.getLong(KEY_LAST_AT, 0L)
-        set(v) = sp.edit().putLong(KEY_LAST_AT, v).apply()
+        set(value) {
+            sp.edit().putLong(KEY_LAST_AT, value).apply()
+        }
 
     var lastDeliveryMessage: String
-        get() = sp.getString(KEY_LAST_MSG, "")!!
-        set(v) = sp.edit().putString(KEY_LAST_MSG, v).apply()
+        get() = sp.getString(KEY_LAST_MSG, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_LAST_MSG, value).apply()
+        }
 
     /** Comma separated list of app packages that must never be captured. */
     var blockedPackages: Set<String>
-        get() = sp.getString(KEY_BLOCKLIST, "")!!
+        get() = (sp.getString(KEY_BLOCKLIST, "") ?: "")
             .split(",")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .toSet()
-        set(v) = sp.edit().putString(KEY_BLOCKLIST, v.joinToString(",")).apply()
+        set(value) {
+            sp.edit().putString(KEY_BLOCKLIST, value.joinToString(",")).apply()
+        }
 
     fun headers(): Map<String, String> {
         val token = authToken
@@ -98,7 +122,7 @@ class Prefs private constructor(context: Context) {
 
         fun get(context: Context): Prefs =
             instance ?: synchronized(this) {
-                instance ?: Prefs(context).also { instance = it }
+                instance ?: Prefs(context.applicationContext).also { instance = it }
             }
 
         fun cleanBase(url: String): String {

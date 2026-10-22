@@ -28,6 +28,7 @@ class ForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         createNotificationChannel()
     }
 
@@ -54,6 +55,7 @@ class ForegroundService : Service() {
 
     override fun onDestroy() {
         drainJob?.cancel()
+        isRunning = false
         super.onDestroy()
     }
 
@@ -92,6 +94,11 @@ class ForegroundService : Service() {
     companion object {
         private const val CHANNEL_ID = "bonjee_foreground_service"
         private const val NOTIFICATION_ID = 1001
+
+        /** True while the capture service is alive in this process. */
+        @Volatile
+        var isRunning: Boolean = false
+            private set
 
         fun updateForegroundStatus(context: Context) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

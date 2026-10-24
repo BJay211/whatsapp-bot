@@ -46,12 +46,13 @@ function getPool(): Pool {
     const needsSsl =
       /sslmode=require/i.test(connectionString) ||
       process.env.DATABASE_SSL === "require" ||
-      process.env.NODE_ENV === "production";
+      /render\.com/i.test(connectionString) ||
+      (process.env.NODE_ENV === "production" && !/localhost|127\.0\.0\.1/.test(connectionString));
     pool = new Pool({
       connectionString,
       max: 5,
       idleTimeoutMillis: 20_000,
-      connectionTimeoutMillis: 4_500,
+      connectionTimeoutMillis: 5_000,
       ssl: needsSsl && !/localhost|127\.0\.0\.1/.test(connectionString)
         ? { rejectUnauthorized: false }
         : undefined,

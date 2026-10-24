@@ -175,8 +175,8 @@ async function loadLiveSnapshot(): Promise<Snapshot> {
       ),
       db.query(
         `SELECT e.id, e.title, e.event_type, e.starts_at, e.ends_at, e.all_day, e.venue,
-                e.status, co.code AS course_code
-           FROM events e LEFT JOIN courses co ON co.id = e.course_id
+                e.status, e.course_id AS course_code
+           FROM events e
           ORDER BY e.starts_at LIMIT 60`,
       ),
       db.query(

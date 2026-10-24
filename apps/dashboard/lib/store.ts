@@ -132,13 +132,13 @@ async function loadLiveSnapshot(): Promise<Snapshot> {
   const now = Date.now();
 
   const [prefsRes, coursesRes, tasksRes, evidenceRes, revisionsRes, messagesRes, relationsRes, eventsRes, countsRes] =
-    await Promise.all([
+    await Promise.allSettled([
       db.query(
         `SELECT display_name, timezone, locale, llm_provider, llm_model, embedding_model,
                 auto_create_tasks, reminder_lead_minutes, briefing_time, retention_days
            FROM user_preferences WHERE user_id = 'owner' LIMIT 1`,
-      ),
-      db.query(`SELECT code, title, lecturer FROM courses ORDER BY code LIMIT 100`),
+      ).catch(() => ({ rows: [] })),
+      db.query(`SELECT code, title, lecturer FROM courses ORDER BY code LIMIT 100`).catch(() => ({ rows: [] })),
       db.query(
         `SELECT t.id, t.kind, t.title, t.description, t.course_code, t.due_at, t.due_is_uncertain,
                 t.starts_at, t.venue, t.priority, t.status, t.confidence, t.requirements,
@@ -146,45 +146,47 @@ async function loadLiveSnapshot(): Promise<Snapshot> {
            FROM tasks t LEFT JOIN chats c ON c.id = t.chat_id
           WHERE t.status <> 'cancelled'
           ORDER BY t.due_at NULLS LAST LIMIT 100`,
-      ),
+      ).catch(() => ({ rows: [] })),
       db.query(
         `SELECT te.task_id, m.external_id, te.role, te.quote, m.content, m.sender_name,
                 m.chat_name, m."timestamp"
            FROM task_evidence te JOIN messages m ON m.id = te.message_id
           ORDER BY m."timestamp"`,
-      ),
+      ).catch(() => ({ rows: [] })),
       db.query(
         `SELECT tr.task_id, tr.changed_fields, tr.old_values, tr.new_values, tr.reason,
                 tr.created_at, m.external_id AS evidence_external_id
            FROM task_revisions tr LEFT JOIN messages m ON m.id = tr.message_id
           ORDER BY tr.created_at`,
-      ),
+      ).catch(() => ({ rows: [] })),
       db.query(
         `SELECT external_id, source, chat_id, chat_name, is_group, sender_id, sender_name,
                 message_type, content, caption, "timestamp", is_forwarded, mentioned_me,
                 has_media
            FROM messages
           ORDER BY "timestamp" DESC LIMIT 120`,
-      ),
+      ).catch(() => ({ rows: [] })),
       db.query(
         `SELECT fm.external_id AS from_external, tm.external_id AS to_external,
                 r.relation, r.confidence
            FROM message_references r
            JOIN messages fm ON fm.id = r.from_message_id
            LEFT JOIN messages tm ON tm.id = r.to_message_id`,
-      ),
+      ).catch(() => ({ rows: [] })),
       db.query(
         `SELECT e.id, e.title, e.event_type, e.starts_at, e.ends_at, e.all_day, e.venue,
                 e.status, e.course_id AS course_code
            FROM events e
           ORDER BY e.starts_at LIMIT 60`,
-      ),
+      ).catch(() => ({ rows: [] })),
       db.query(
         `SELECT date_trunc('day', "timestamp") AS day, count(*)::int AS count
            FROM messages WHERE "timestamp" > now() - interval '7 days'
           GROUP BY 1 ORDER BY 1`,
-      ),
-    ]);
+      ).catch(() => ({ rows: [] })),
+    ]).then((results) =>
+      results.map((r) => (r.status === "fulfilled" ? r.value : { rows: [] })),
+    );
 
   const prefsRow = prefsRes.rows[0];
   const user: UserPreferences = prefsRow

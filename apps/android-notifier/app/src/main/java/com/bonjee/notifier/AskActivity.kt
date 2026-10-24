@@ -25,6 +25,12 @@ class AskActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         prefs = Prefs.get(this)
+        
+        // Auto-fill query if passed from home
+        val passedQuery = intent.getStringExtra("query")
+        if (!passedQuery.isNullOrEmpty()) {
+            binding.editQuestion.setText(passedQuery)
+        }
 
         binding.btnAsk.setOnClickListener { ask() }
         binding.btnBack.setOnClickListener { finish() }

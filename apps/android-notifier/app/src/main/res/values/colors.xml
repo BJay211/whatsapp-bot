@@ -1,10 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
+    <color name="bg_primary">#000814</color>
+    <color name="bg_secondary">#001D3D</color>
+    <color name="bg_card">#000d1a</color>
+    <color name="bg_card_alt">#001529</color>
+    
+    <color name="cyan">#00e5ff</color>
+    <color name="cyan_bright">#18ffff</color>
+    <color name="cyan_glow">#00bcd4</color>
+    
+    <color name="orange">#ff6f00</color>
+    <color name="orange_bright">#ff9100</color>
+    <color name="amber">#ffc107</color>
+    
+    <color name="red">#ff1744</color>
+    <color name="red_glow">#d50000</color>
+    
+    <color name="green">#00e676</color>
+    <color name="green_bright">#69f0ae</color>
+    
+    <color name="purple">#7c4dff</color>
+    <color name="purple_bright">#b388ff</color>
+    
+    <color name="border_cyan">#00e5ff33</color>
+    <color name="border_orange">#ff6f0033</color>
+    <color name="border">#1a237e33</color>
+    
+    <color name="text_primary">#e0f7fa</color>
+    <color name="text_secondary">#80deea</color>
+    <color name="text_tertiary">#4dd0e1</color>
+    <color name="text_dim">#26c6da</color>
+    
     <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
 </resources>

@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
+  poweredByHeader: false,
+  serverExternalPackages: ["pg"],
   experimental: {
-    serverComponentsExternalPackages: ['@prisma/client'],
+    optimizePackageImports: ["lucide-react"],
   },
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

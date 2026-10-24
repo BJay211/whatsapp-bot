@@ -45,11 +45,30 @@ foreach ($p in $packages) {
         continue
     }
 
-    Say "Downloading $($p.File) ($($p.MinMB) MB)..."
+    Say "Downloading $($p.File) (about $($p.MinMB) MB)..."
+    $expectedBytes = $min
     for ($attempt = 1; $attempt -le 10; $attempt++) {
-        & curl.exe -L --fail --silent --show-error --retry 3 --retry-delay 3 --connect-timeout 30 `
-            --speed-limit 2048 --speed-time 60 --max-time 3600 -C - -o $zip "$Base/$($p.File)"
-        $code = $LASTEXITCODE
+        $job = Start-Job -ScriptBlock {
+            param($u, $t)
+            & curl.exe -L --fail --silent --show-error --retry 3 --retry-delay 3 --connect-timeout 30 `
+                --speed-limit 2048 --speed-time 60 --max-time 3600 -C - -o $t $u
+            $LASTEXITCODE
+        } -ArgumentList "$Base/$($p.File)", $zip
+
+        $prev = if (Test-Path $zip) { (Get-Item $zip).Length } else { 0 }
+        while ($job.State -eq 'Running') {
+            Start-Sleep -Seconds 5
+            $sz = if (Test-Path $zip) { (Get-Item $zip).Length } else { 0 }
+            $pct = [math]::Min(100.0, 100.0 * $sz / $expectedBytes)
+            $rate = ($sz - $prev) / 5 / 1MB
+            Say ("  {0,7:N1} / {1,7:N1} MB  {2,5:N1}%  {3,5:N2} MB/s" -f ($sz / 1MB), ($expectedBytes / 1MB), $pct, $rate)
+            $prev = $sz
+        }
+
+        $code = (Receive-Job $job | Select-Object -Last 1)
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+        if ($null -eq $code) { $code = 1 }
+
         $size = if (Test-Path $zip) { (Get-Item $zip).Length } else { 0 }
         if ($code -eq 0 -and $size -ge $min -and (Test-ZipOk $zip)) { break }
         Say ("  attempt {0}: curl={1}, {2:N1} MB - retrying" -f $attempt, $code, ($size / 1MB))

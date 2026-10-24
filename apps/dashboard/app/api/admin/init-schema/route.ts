@@ -1,7 +1,24 @@
 import { NextResponse } from "next/server";
-import { getPool } from "@/lib/store";
+import { Pool } from "pg";
 
 export const dynamic = "force-dynamic";
+
+function getPool() {
+  const connectionString = process.env.DATABASE_URL!;
+  const needsSsl =
+    /sslmode=require/i.test(connectionString) ||
+    process.env.DATABASE_SSL === "require" ||
+    /render\.com/i.test(connectionString) ||
+    (process.env.NODE_ENV === "production" && !/localhost|127\.0\.0\.1/.test(connectionString));
+  return new Pool({
+    connectionString,
+    max: 1,
+    connectionTimeoutMillis: 5000,
+    ssl: needsSsl && !/localhost|127\.0\.0\.1/.test(connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined,
+  });
+}
 
 export async function POST() {
   const db = getPool();

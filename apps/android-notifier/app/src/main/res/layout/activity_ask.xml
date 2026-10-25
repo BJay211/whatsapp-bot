@@ -48,11 +48,22 @@
             android:layout_weight="1"
             android:text="Ask" />
 
+        <ImageButton
+            android:id="@+id/btnMic"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Speak"
+            android:src="@android:drawable/ic_btn_speak_now"
+            android:tint="@color/cyan" />
+
         <Button
             android:id="@+id/btnBack"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:text="Back" />
     </LinearLayout>

@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { env, hostOf } from "./env";
 import {
   buildBrief,
   buildDemoSnapshot,
@@ -348,10 +349,13 @@ function buildConnections(live: boolean): Connection[] {
   return [
     {
       id: "conn_db",
-      name: "PostgreSQL archive",
+      name: "Supabase Postgres",
       kind: "database",
       status: live ? "connected" : "demo",
-      detail: live ? "Live archive connected with read/write access." : "Synthetic fixtures.",
+      detail: live
+        ? `Live archive via ${hostOf(env.supabaseUrl)} (read/write).`
+        : "Synthetic fixtures. Set DATABASE_URL to the Supabase connection string.",
+      endpoint: env.supabaseUrl,
       lastSeen: new Date().toISOString(),
     },
     {
@@ -369,11 +373,11 @@ function buildConnections(live: boolean): Connection[] {
       id: "conn_evolution",
       name: "Evolution API",
       kind: "whatsapp",
-      status: process.env.EVOLUTION_API_URL ? "connected" : "unconfigured",
-      detail: process.env.EVOLUTION_API_URL
-        ? "Configured. Pair the instance and enable MESSAGES_UPSERT."
+      status: env.evolutionApiUrl ? "connected" : "unconfigured",
+      detail: env.evolutionApiUrl
+        ? `Configured at ${hostOf(env.evolutionApiUrl)} for instance "${env.evolutionInstance}".`
         : "Set EVOLUTION_API_URL after deploying the WhatsApp bridge.",
-      endpoint: process.env.EVOLUTION_API_URL,
+      endpoint: env.evolutionApiUrl,
       lastSeen: null,
     },
     {

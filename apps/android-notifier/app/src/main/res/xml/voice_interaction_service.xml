@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Assistant configuration for Android's "Digital assistant app" picker.
+
+  sessionService  - the service Android binds when the assistant is invoked.
+  supportsAssist  - lets the app answer the assist gesture (long-press home).
+  supportsLaunchVoiceAssistFromKeyguard - assistant is offered on the lock screen.
+
+  recognitionService is intentionally omitted: the session hands off to
+  AskActivity, which uses the device's normal RecognizerIntent provider, so the
+  system's default speech recogniser is used and no extra service is required.
+-->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.bonjee.notifier.assistant.BonjeeVoiceInteractionSessionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true" />

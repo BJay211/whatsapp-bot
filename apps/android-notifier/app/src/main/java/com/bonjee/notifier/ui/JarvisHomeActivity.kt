@@ -170,6 +170,12 @@ class JarvisHomeActivity : AppCompatActivity() {
                 R.id.nav_devices -> {
                     openWebModule("/devices", "DEVICES & n8n")
                 }
+                R.id.nav_app_settings -> {
+                    startActivity(Intent(this, com.bonjee.notifier.MainActivity::class.java))
+                }
+                R.id.nav_assistant -> {
+                    com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
+                }
                 R.id.nav_permissions -> {
                     startActivity(Intent(this, PermissionsActivity::class.java))
                 }

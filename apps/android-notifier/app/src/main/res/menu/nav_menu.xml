@@ -41,6 +41,14 @@
     <item android:title="CONFIGURATION">
         <menu>
             <item
+                android:id="@+id/nav_app_settings"
+                android:icon="@android:drawable/ic_menu_edit"
+                android:title="App Settings" />
+            <item
+                android:id="@+id/nav_assistant"
+                android:icon="@android:drawable/ic_btn_speak_now"
+                android:title="Default Assistant" />
+            <item
                 android:id="@+id/nav_devices"
                 android:icon="@android:drawable/ic_menu_preferences"
                 android:title="Devices &amp; n8n" />

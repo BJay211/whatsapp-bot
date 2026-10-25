@@ -59,6 +59,9 @@ class MainActivity : AppCompatActivity() {
             refreshStatus()
         }
         binding.btnAsk.setOnClickListener { openAssistant() }
+        binding.btnSetAssistant.setOnClickListener {
+            com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
+        }
         binding.btnSync.setOnClickListener { syncNow() }
         binding.btnClearQueue.setOnClickListener {
             val n = DeliveryQueue(this).count()
@@ -73,6 +76,20 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshStatus()
+        refreshAssistantStatus()
+    }
+
+    /**
+     * Shows whether Android currently routes assistant invocations to this app.
+     * Purely informational - the system forbids changing it programmatically.
+     */
+    private fun refreshAssistantStatus() {
+        val isDefault = com.bonjee.notifier.assistant.AssistantRole.isDefault(this)
+        binding.txtAssistantStatus.text = if (isDefault) {
+            "Default assistant: JARVIS is active"
+        } else {
+            "Default assistant: not set (currently another app or none)"
+        }
     }
 
     // ---------------------------------------------------------------- settings

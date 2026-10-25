@@ -124,6 +124,20 @@ menu button - or swipe in from the left edge - to open the side drawer.
 
 No Android Studio is required anywhere in that flow.
 
+#### Make JARVIS the default assistant
+
+The app ships a real `VoiceInteractionService`, so Android lists it under
+**Settings > Apps > Default apps > Digital assistant app** (HyperOS/MIUI wording
+varies: *Settings > Apps > Default apps > Digital assistant app*).
+
+From inside the app use **menu > Default Assistant** or **App Settings > SET AS
+DEFAULT ASSISTANT** to jump straight to that screen. Android only allows the user
+to change the default, so the app never switches it silently.
+
+Once selected, the assistant gesture (long-press home / power-button action)
+opens JARVIS, starts listening, sends the recognised text to
+`/webhook/personal-ai-ask` and reads the answer back with the system TTS engine.
+
 ### 6. WhatsApp (Evolution API)
 
 Point the instance webhook at

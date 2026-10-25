@@ -118,16 +118,17 @@ services:
           property: host
         format: https://%s
       - key: EVOLUTION_API_URL
-        fromService:
-          type: web
-          name: bonjee-evolution
-          property: host
-        format: https://%s
+        value: https://evolution-api-rqy3.onrender.com
+      - key: EVOLUTION_INSTANCE
+        value: whatsapp bot
+      # Paste the Evolution AUTHENTICATION_API_KEY in the Render dashboard.
       - key: EVOLUTION_API_KEY
-        fromService:
-          type: web
-          name: bonjee-evolution
-          envVarKey: AUTHENTICATION_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        value: https://hwpfxpfcixkykqpsiohi.supabase.co
+      # Public key only. Never put the sb_secret_ service key in a client app.
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
       # Fill this in the Render dashboard to lock the cockpit behind a passphrase.
       - key: DASHBOARD_PASSPHRASE
         sync: false

@@ -74,6 +74,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnAsk.setOnClickListener { openAssistant() }
         binding.btnSetAssistant.setOnClickListener { requestAssistantRole() }
+        binding.btnAssistantDiagnostics.setOnClickListener { showAssistantDiagnostics() }
         binding.btnSync.setOnClickListener { syncNow() }
         binding.btnClearQueue.setOnClickListener {
             val n = DeliveryQueue(this).count()
@@ -122,6 +123,32 @@ class MainActivity : AppCompatActivity() {
             }
         }
         com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
+    }
+
+    /**
+     * Shows what the system reports about the assistant registration, using the
+     * same PackageManager/RoleManager queries the Digital assistant app picker
+     * uses. Read-only: nothing is changed by looking.
+     */
+    private fun showAssistantDiagnostics() {
+        val report = com.bonjee.notifier.assistant.AssistantDiagnostics.report(this)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Assistant status")
+            .setMessage(report)
+            .setPositiveButton("Share") { _, _ ->
+                try {
+                    startActivity(
+                        Intent.createChooser(
+                            com.bonjee.notifier.assistant.AssistantDiagnostics.shareIntent(report),
+                            "Share diagnostic",
+                        ),
+                    )
+                } catch (t: Throwable) {
+                    toast("No app available to share the report")
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     // ---------------------------------------------------------------- settings

@@ -1,4 +1,11 @@
 <resources>
     <string name="app_name">JARVIS</string>
     <string name="app_subtitle">JUST A RATHER VERY INTELLIGENT SYSTEM</string>
+    <!--
+      Label used only for the assistant service. Android shows this string in
+      Settings > Apps > Default apps > Digital assistant app, so it has to be
+      recognisable next to Google/ChatGPT/Claude - "JARVIS" alone is easy to
+      scroll past when looking for the app.
+    -->
+    <string name="assistant_service_label">JARVIS (Bonjee)</string>
 </resources>

@@ -131,8 +131,17 @@ The app ships a real `VoiceInteractionService`, so Android lists it under
 varies: *Settings > Apps > Default apps > Digital assistant app*).
 
 From inside the app use **menu > Default Assistant** or **App Settings > SET AS
-DEFAULT ASSISTANT** to jump straight to that screen. Android only allows the user
-to change the default, so the app never switches it silently.
+DEFAULT ASSISTANT** to jump straight to that screen. On Android 10+ that button
+opens the system assistant-role dialog (`RoleManager.ROLE_ASSISTANT`); older
+releases fall back to the settings screen. Android only allows the user to change
+the default, so the app never switches it silently.
+
+The picker lists the service label, which is **JARVIS (Bonjee)** - not the launcher
+label. If JARVIS is missing from the list, open **App Settings > CHECK ASSISTANT
+STATUS**: it runs the same `PackageManager` / `RoleManager` queries the picker uses
+and prints a shareable report (build version, whether the service answers
+`android.service.voice.VoiceInteractionService`, the parsed `sessionService`, role
+availability, and `Settings.Secure voice_interaction_service`).
 
 Once selected, the assistant gesture (long-press home / power-button action)
 opens JARVIS, starts listening, sends the recognised text to

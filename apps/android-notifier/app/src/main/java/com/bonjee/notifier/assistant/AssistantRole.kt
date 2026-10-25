@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 
@@ -11,8 +12,9 @@ import android.widget.Toast
  * Helpers for Android's assistant role.
  *
  * The app never changes the default assistant silently - Android only allows the
- * user to do that. This class only reports the current state and opens the right
- * settings screen so the user can pick JARVIS.
+ * user to do that. This class reports the current state and produces the picker
+ * the user needs: the official [android.app.role.RoleManager.ROLE_ASSISTANT]
+ * request on Android 10+, or the assistant settings screen on older releases.
  */
 object AssistantRole {
 
@@ -23,7 +25,9 @@ object AssistantRole {
         ComponentName(context, BonjeeVoiceInteractionService::class.java)
 
     /** True when Android currently routes assistant invocations to this app. */
-    fun isDefault(context: Context): Boolean {
+    fun isDefault(context: Context): Boolean = isDefaultBySetting(context) || holdsRole(context)
+
+    private fun isDefaultBySetting(context: Context): Boolean {
         val stored = try {
             Settings.Secure.getString(context.contentResolver, VOICE_INTERACTION_SERVICE)
         } catch (t: Throwable) {
@@ -33,6 +37,47 @@ object AssistantRole {
         val current = ComponentName.unflattenFromString(stored) ?: return false
         val ours = component(context)
         return current.packageName == ours.packageName && current.className == ours.className
+    }
+
+    // ------------------------------------------------------------- role APIs
+
+    /**
+     * The assistant role only exists from Android 10 (API 29). On older releases
+     * the same thing is controlled by the settings screen below.
+     */
+    fun isRoleAvailable(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return try {
+            val manager = context.getSystemService(android.app.role.RoleManager::class.java)
+            manager != null && manager.isRoleAvailable(android.app.role.RoleManager.ROLE_ASSISTANT)
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    fun holdsRole(context: Context): Boolean {
+        if (!isRoleAvailable(context)) return false
+        return try {
+            val manager = context.getSystemService(android.app.role.RoleManager::class.java)
+            manager?.isRoleHeld(android.app.role.RoleManager.ROLE_ASSISTANT) == true
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * The system dialog that asks the user to make this app the default
+     * assistant. Returns null when the device has no assistant role (API < 29,
+     * or an OEM that removed it), in which case the settings screen is used.
+     */
+    fun roleRequestIntent(context: Context): Intent? {
+        if (!isRoleAvailable(context)) return null
+        return try {
+            context.getSystemService(android.app.role.RoleManager::class.java)
+                ?.createRequestRoleIntent(android.app.role.RoleManager.ROLE_ASSISTANT)
+        } catch (t: Throwable) {
+            null
+        }
     }
 
     /**

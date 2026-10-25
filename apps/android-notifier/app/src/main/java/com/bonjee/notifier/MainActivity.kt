@@ -33,6 +33,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Result of the Android 10+ "assistant" role dialog. The system already
+     * applied the user's choice by the time we get here, so only the status line
+     * needs refreshing.
+     */
+    private val requestAssistantRole = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshAssistantStatus()
+        if (com.bonjee.notifier.assistant.AssistantRole.isDefault(this)) {
+            toast("JARVIS is now your default assistant")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -59,9 +73,7 @@ class MainActivity : AppCompatActivity() {
             refreshStatus()
         }
         binding.btnAsk.setOnClickListener { openAssistant() }
-        binding.btnSetAssistant.setOnClickListener {
-            com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
-        }
+        binding.btnSetAssistant.setOnClickListener { requestAssistantRole() }
         binding.btnSync.setOnClickListener { syncNow() }
         binding.btnClearQueue.setOnClickListener {
             val n = DeliveryQueue(this).count()
@@ -87,9 +99,29 @@ class MainActivity : AppCompatActivity() {
         val isDefault = com.bonjee.notifier.assistant.AssistantRole.isDefault(this)
         binding.txtAssistantStatus.text = if (isDefault) {
             "Default assistant: JARVIS is active"
+        } else if (com.bonjee.notifier.assistant.AssistantRole.isRoleAvailable(this)) {
+            "Default assistant: not set - tap below to choose JARVIS"
         } else {
-            "Default assistant: not set (currently another app or none)"
+            "Default assistant: not set (this Android version has no assistant role)"
         }
+    }
+
+    /**
+     * Asks the system to consider this app as the assistant. Android 10+ shows
+     * the official role dialog; everything else falls back to the settings screen
+     * where the user makes the same choice by hand.
+     */
+    private fun requestAssistantRole() {
+        val intent = com.bonjee.notifier.assistant.AssistantRole.roleRequestIntent(this)
+        if (intent != null) {
+            try {
+                requestAssistantRole.launch(intent)
+                return
+            } catch (t: Throwable) {
+                // No activity handles the role request; fall through to Settings.
+            }
+        }
+        com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
     }
 
     // ---------------------------------------------------------------- settings

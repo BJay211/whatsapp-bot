@@ -41,6 +41,19 @@ class JarvisHomeActivity : AppCompatActivity() {
         }
         stopVoiceAnimation()
     }
+
+    /** Android 10+ assistant role dialog opened from the drawer. */
+    private val assistantRoleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        val isDefault = com.bonjee.notifier.assistant.AssistantRole.isDefault(this)
+        Toast.makeText(
+            this,
+            if (isDefault) "JARVIS is now your default assistant"
+            else "JARVIS is not the default assistant yet",
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -174,7 +187,17 @@ class JarvisHomeActivity : AppCompatActivity() {
                     startActivity(Intent(this, com.bonjee.notifier.MainActivity::class.java))
                 }
                 R.id.nav_assistant -> {
-                    com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
+                    val roleIntent =
+                        com.bonjee.notifier.assistant.AssistantRole.roleRequestIntent(this)
+                    if (roleIntent != null) {
+                        try {
+                            assistantRoleLauncher.launch(roleIntent)
+                        } catch (t: Throwable) {
+                            com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
+                        }
+                    } else {
+                        com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
+                    }
                 }
                 R.id.nav_permissions -> {
                     startActivity(Intent(this, PermissionsActivity::class.java))

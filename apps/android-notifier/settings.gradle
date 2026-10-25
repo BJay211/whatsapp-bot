@@ -8,6 +8,12 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
+        // Offline fallback for machines on a locked-down / flaky network:
+        // any artifact placed under .toolchain/local-maven wins over the network.
+        def localMaven = new File(rootDir, ".toolchain/local-maven")
+        if (localMaven.isDirectory()) {
+            maven { url = localMaven.toURI() }
+        }
         google()
         mavenCentral()
     }

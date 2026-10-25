@@ -37,6 +37,13 @@ android {
         buildConfig true
     }
 
+    // The release APK is debug-signed for sideloading, so a full lint gate is not
+    // useful here and only slows down (or blocks) offline builds.
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

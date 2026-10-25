@@ -246,6 +246,27 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
+                    android:hint="Bonjee Dashboard URL"
+                    android:textColorHint="@color/text_tertiary"
+                    app:boxStrokeColor="@color/cyan"
+                    app:hintTextColor="@color/cyan"
+                    app:helperText="Used by the side menu (Inbox, Tasks, Calendar, Memory...)"
+                    app:helperTextTextColor="@color/text_tertiary">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editDashboardUrl"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:singleLine="true"
+                        android:textColor="@color/text_primary" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
                     android:hint="Notification Webhook"
                     android:textColorHint="@color/text_tertiary"
                     app:boxStrokeColor="@color/cyan"

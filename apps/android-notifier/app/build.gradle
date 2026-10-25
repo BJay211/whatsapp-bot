@@ -17,6 +17,7 @@ android {
         buildConfigField "String", "DEFAULT_N8N_BASE_URL", "\"https://bonjee-n8n.onrender.com\""
         buildConfigField "String", "DEFAULT_NOTIFICATION_PATH", "\"/webhook/notifications-ingest\""
         buildConfigField "String", "DEFAULT_ASK_PATH", "\"/webhook/personal-ai-ask\""
+        buildConfigField "String", "DEFAULT_DASHBOARD_URL", "\"https://bonjee-dashboard.onrender.com\""
     }
 
     buildTypes {
@@ -63,4 +64,5 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
 }

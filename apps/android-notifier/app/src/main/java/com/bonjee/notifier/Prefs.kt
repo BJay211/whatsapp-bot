@@ -39,6 +39,21 @@ class Prefs private constructor(context: Context) {
             sp.edit().putString(KEY_HEALTH_PATH, normalisePath(value)).apply()
         }
 
+    /**
+     * Base URL of the Bonjee OS web dashboard. Every drawer module (Inbox, Tasks,
+     * Calendar, Automations, Memory, Settings, Devices) opens this same deployment
+     * inside a WebView so the app and the web always read the same database.
+     */
+    var dashboardBaseUrl: String
+        get() = sp.getString(KEY_DASHBOARD_URL, BuildConfig.DEFAULT_DASHBOARD_URL)
+            ?: BuildConfig.DEFAULT_DASHBOARD_URL
+        set(value) {
+            sp.edit().putString(KEY_DASHBOARD_URL, cleanBase(value)).apply()
+        }
+
+    fun dashboardUrl(path: String = "/"): String =
+        dashboardBaseUrl.trimEnd('/') + normalisePath(path)
+
     /** Optional bearer/header token sent on every outbound request. */
     var authToken: String
         get() = sp.getString(KEY_AUTH_TOKEN, "") ?: ""
@@ -106,6 +121,7 @@ class Prefs private constructor(context: Context) {
         const val KEY_NOTIF_PATH = "notification_path"
         const val KEY_ASK_PATH = "ask_path"
         const val KEY_HEALTH_PATH = "health_path"
+        const val KEY_DASHBOARD_URL = "dashboard_base_url"
         const val KEY_AUTH_TOKEN = "auth_token"
         const val KEY_AUTH_HEADER = "auth_header_name"
         const val KEY_CAPTURE_ENABLED = "capture_enabled"

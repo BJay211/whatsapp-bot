@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="200dp"
+    android:background="@drawable/energy_field_bg"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="16dp">
+
+    <View
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:background="@drawable/core_inner_glow" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="BONJEE OS"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@color/cyan"
+        android:letterSpacing="0.3"
+        android:layout_marginTop="12dp"
+        android:shadowColor="@color/cyan_glow"
+        android:shadowRadius="10" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="JARVIS INTERFACE"
+        android:textSize="9sp"
+        android:textColor="@color/orange"
+        android:letterSpacing="0.25"
+        android:layout_marginTop="4dp" />
+</LinearLayout>

@@ -2,29 +2,134 @@ package com.bonjee.notifier.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.speech.RecognizerIntent
+import android.view.View
+import android.view.animation.AnimationUtils
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.view.GravityCompat
+import androidx.lifecycle.lifecycleScope
 import com.bonjee.notifier.AskActivity
-import com.bonjee.notifier.MainActivity
+import com.bonjee.notifier.Prefs
+import com.bonjee.notifier.R
 import com.bonjee.notifier.databinding.ActivityJarvisHomeBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
 class JarvisHomeActivity : AppCompatActivity() {
     
     private lateinit var binding: ActivityJarvisHomeBinding
+    private lateinit var prefs: Prefs
+    private var isVoiceMode = true
+    
+    private val speechRecognizerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val data = result.data
+            val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val spokenText = results?.get(0) ?: ""
+            if (spokenText.isNotEmpty()) {
+                val intent = Intent(this, AskActivity::class.java)
+                intent.putExtra("query", spokenText)
+                startActivity(intent)
+            }
+        }
+        stopVoiceAnimation()
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityJarvisHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        prefs = Prefs.get(this)
         
+        setupAnimations()
         setupClickListeners()
+        setupNavigationDrawer()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshConnectionStatus()
+    }
+
+    /**
+     * Pings the n8n health webhook and the dashboard health endpoint so the
+     * headline honestly reports whether the phone can reach the backend.
+     */
+    private fun refreshConnectionStatus() {
+        binding.txtStatus.text = "CHECKING •••"
+        binding.txtStatus.setTextColor(ContextCompat.getColor(this, R.color.amber))
+        lifecycleScope.launch {
+            val n8nOk = withContext(Dispatchers.IO) {
+                com.bonjee.notifier.ApiClient.shared.get(prefs.healthUrl(), prefs.headers()).ok
+            }
+            val dashboardOk = withContext(Dispatchers.IO) {
+                com.bonjee.notifier.ApiClient.shared
+                    .get(prefs.dashboardUrl("/api/health"), prefs.headers()).ok
+            }
+            binding.txtStatus.text = when {
+                n8nOk && dashboardOk -> "ONLINE • n8n + CLOUD SYNCED"
+                n8nOk -> "ONLINE • n8n READY"
+                dashboardOk -> "ONLINE • WEB READY"
+                else -> "OFFLINE • CHECK CONFIG"
+            }
+            binding.txtStatus.setTextColor(
+                ContextCompat.getColor(
+                    this@JarvisHomeActivity,
+                    if (n8nOk || dashboardOk) R.color.green else R.color.red
+                )
+            )
+        }
+    }
+    
+    private fun setupAnimations() {
+        val pulseAnim = AnimationUtils.loadAnimation(this, R.anim.pulse)
+        binding.glowLayer1.startAnimation(pulseAnim)
+        binding.glowLayer2.startAnimation(AnimationUtils.loadAnimation(this, R.anim.pulse_slow))
+        binding.coreOuterRing.startAnimation(AnimationUtils.loadAnimation(this, R.anim.rotate))
     }
     
     private fun setupClickListeners() {
-        binding.btnVoice.setOnClickListener {
-            Toast.makeText(this, "Voice input initializing...", Toast.LENGTH_SHORT).show()
+        // Menu button
+        binding.btnMenu.setOnClickListener {
+            binding.drawerLayout.openDrawer(GravityCompat.START)
         }
         
+        // Voice mode
+        binding.btnModeVoice.setOnClickListener {
+            isVoiceMode = true
+            binding.voiceInputCard.visibility = View.VISIBLE
+            binding.textInputCard.visibility = View.GONE
+            binding.btnModeVoice.strokeColor = ContextCompat.getColorStateList(this, R.color.cyan)
+            binding.btnModeVoice.setTextColor(ContextCompat.getColor(this, R.color.cyan))
+            binding.btnModeType.strokeColor = ContextCompat.getColorStateList(this, R.color.border)
+            binding.btnModeType.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+        }
+        
+        // Type mode
+        binding.btnModeType.setOnClickListener {
+            isVoiceMode = false
+            binding.voiceInputCard.visibility = View.GONE
+            binding.textInputCard.visibility = View.VISIBLE
+            binding.btnModeType.strokeColor = ContextCompat.getColorStateList(this, R.color.cyan)
+            binding.btnModeType.setTextColor(ContextCompat.getColor(this, R.color.cyan))
+            binding.btnModeVoice.strokeColor = ContextCompat.getColorStateList(this, R.color.border)
+            binding.btnModeVoice.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+        }
+        
+        // Voice input
+        binding.btnVoice.setOnClickListener {
+            startVoiceRecognition()
+        }
+        
+        // Text send
         binding.btnSpeak.setOnClickListener {
             val query = binding.editQuery.text.toString()
             if (query.isNotEmpty()) {
@@ -36,25 +141,104 @@ class JarvisHomeActivity : AppCompatActivity() {
                 Toast.makeText(this, "Please enter a command", Toast.LENGTH_SHORT).show()
             }
         }
-        
-        binding.btnStop.setOnClickListener {
-            Toast.makeText(this, "Interrupted", Toast.LENGTH_SHORT).show()
+    }
+    
+    private fun setupNavigationDrawer() {
+        binding.navView.setNavigationItemSelectedListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.nav_home -> {
+                    // Already on home
+                }
+                R.id.nav_ask -> {
+                    startActivity(Intent(this, AskActivity::class.java))
+                }
+                R.id.nav_memory -> {
+                    openWebModule("/memory", "MEMORY CORE")
+                }
+                R.id.nav_inbox -> {
+                    openWebModule("/inbox", "INBOX")
+                }
+                R.id.nav_tasks -> {
+                    openWebModule("/tasks", "TASKS")
+                }
+                R.id.nav_calendar -> {
+                    openWebModule("/calendar", "CALENDAR")
+                }
+                R.id.nav_automations -> {
+                    openWebModule("/automations", "AUTOMATIONS")
+                }
+                R.id.nav_devices -> {
+                    openWebModule("/devices", "DEVICES & n8n")
+                }
+                R.id.nav_permissions -> {
+                    startActivity(Intent(this, PermissionsActivity::class.java))
+                }
+                R.id.nav_actions -> {
+                    startActivity(Intent(this, ActionsActivity::class.java))
+                }
+                R.id.nav_settings -> {
+                    openWebModule("/settings", "SETTINGS")
+                }
+            }
+            binding.drawerLayout.closeDrawer(GravityCompat.START)
+            true
         }
-        
-        binding.cardMemory.setOnClickListener {
-            startActivity(Intent(this, MemoryActivity::class.java))
+    }
+
+    private fun openWebModule(path: String, title: String) {
+        val intent = Intent(this, WebModuleActivity::class.java)
+        intent.putExtra(WebModuleActivity.EXTRA_PATH, path)
+        intent.putExtra(WebModuleActivity.EXTRA_TITLE, title)
+        startActivity(intent)
+    }
+    
+    private fun startVoiceRecognition() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to JARVIS...")
         }
-        
-        binding.cardPermissions.setOnClickListener {
-            startActivity(Intent(this, PermissionsActivity::class.java))
+        try {
+            startVoiceAnimation()
+            speechRecognizerLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Voice recognition not available", Toast.LENGTH_SHORT).show()
+            stopVoiceAnimation()
         }
-        
-        binding.cardActions.setOnClickListener {
-            startActivity(Intent(this, ActionsActivity::class.java))
-        }
-        
-        binding.cardSettings.setOnClickListener {
-            startActivity(Intent(this, MainActivity::class.java))
+    }
+    
+    private fun startVoiceAnimation() {
+        binding.waveformContainer.visibility = View.VISIBLE
+        binding.wave1.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim))
+        binding.wave2.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim2))
+        binding.wave3.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim3))
+        binding.wave4.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim))
+        binding.wave5.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim2))
+        binding.wave6.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim3))
+        binding.wave7.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim))
+        binding.txtStatus.text = "LISTENING..."
+        binding.txtStatus.setTextColor(ContextCompat.getColor(this, R.color.orange))
+    }
+    
+    private fun stopVoiceAnimation() {
+        binding.waveformContainer.visibility = View.GONE
+        binding.wave1.clearAnimation()
+        binding.wave2.clearAnimation()
+        binding.wave3.clearAnimation()
+        binding.wave4.clearAnimation()
+        binding.wave5.clearAnimation()
+        binding.wave6.clearAnimation()
+        binding.wave7.clearAnimation()
+        binding.txtStatus.text = "ONLINE • READY"
+        binding.txtStatus.setTextColor(ContextCompat.getColor(this, R.color.green))
+        refreshConnectionStatus()
+    }
+    
+    override fun onBackPressed() {
+        if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            binding.drawerLayout.closeDrawer(GravityCompat.START)
+        } else {
+            super.onBackPressed()
         }
     }
 }

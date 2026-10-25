@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:title="CORE">
+        <menu>
+            <item
+                android:id="@+id/nav_home"
+                android:icon="@android:drawable/ic_menu_compass"
+                android:title="Home" />
+            <item
+                android:id="@+id/nav_ask"
+                android:icon="@android:drawable/ic_menu_help"
+                android:title="Ask JARVIS" />
+            <item
+                android:id="@+id/nav_memory"
+                android:icon="@android:drawable/ic_menu_save"
+                android:title="Memory Core" />
+        </menu>
+    </item>
+
+    <item android:title="SYSTEM">
+        <menu>
+            <item
+                android:id="@+id/nav_inbox"
+                android:icon="@android:drawable/ic_dialog_email"
+                android:title="Inbox" />
+            <item
+                android:id="@+id/nav_tasks"
+                android:icon="@android:drawable/ic_menu_agenda"
+                android:title="Tasks" />
+            <item
+                android:id="@+id/nav_calendar"
+                android:icon="@android:drawable/ic_menu_my_calendar"
+                android:title="Calendar" />
+            <item
+                android:id="@+id/nav_automations"
+                android:icon="@android:drawable/ic_menu_manage"
+                android:title="Automations" />
+        </menu>
+    </item>
+
+    <item android:title="CONFIGURATION">
+        <menu>
+            <item
+                android:id="@+id/nav_devices"
+                android:icon="@android:drawable/ic_menu_preferences"
+                android:title="Devices &amp; n8n" />
+            <item
+                android:id="@+id/nav_permissions"
+                android:icon="@android:drawable/ic_lock_idle_lock"
+                android:title="Access Control" />
+            <item
+                android:id="@+id/nav_actions"
+                android:icon="@android:drawable/ic_menu_share"
+                android:title="Actions &amp; Integrations" />
+            <item
+                android:id="@+id/nav_settings"
+                android:icon="@android:drawable/ic_menu_set_as"
+                android:title="Settings" />
+        </menu>
+    </item>
+</menu>

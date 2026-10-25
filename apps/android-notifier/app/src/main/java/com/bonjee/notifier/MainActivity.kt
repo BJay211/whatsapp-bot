@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs.get(this)
 
         binding.editBaseUrl.setText(prefs.n8nBaseUrl)
+        binding.editDashboardUrl.setText(prefs.dashboardBaseUrl)
         binding.editNotificationPath.setText(prefs.notificationPath)
         binding.editAskPath.setText(prefs.askPath)
         binding.editAuthToken.setText(prefs.authToken)
@@ -78,6 +79,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveSettings() {
         prefs.n8nBaseUrl = binding.editBaseUrl.text.toString()
+        prefs.dashboardBaseUrl = binding.editDashboardUrl.text.toString()
         prefs.notificationPath = binding.editNotificationPath.text.toString()
         prefs.askPath = binding.editAskPath.text.toString()
         prefs.authToken = binding.editAuthToken.text.toString()
@@ -88,6 +90,7 @@ class MainActivity : AppCompatActivity() {
 
         // Reflect the normalised values back into the fields.
         binding.editBaseUrl.setText(prefs.n8nBaseUrl)
+        binding.editDashboardUrl.setText(prefs.dashboardBaseUrl)
         binding.editNotificationPath.setText(prefs.notificationPath)
         binding.editAskPath.setText(prefs.askPath)
 

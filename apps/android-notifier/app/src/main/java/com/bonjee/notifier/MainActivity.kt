@@ -75,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnAsk.setOnClickListener { openAssistant() }
         binding.btnSetAssistant.setOnClickListener { requestAssistantRole() }
         binding.btnAssistantDiagnostics.setOnClickListener { showAssistantDiagnostics() }
+        binding.btnTestAssistant.setOnClickListener { testVoiceAssistant() }
         binding.btnSync.setOnClickListener { syncNow() }
         binding.btnClearQueue.setOnClickListener {
             val n = DeliveryQueue(this).count()
@@ -297,6 +298,23 @@ class MainActivity : AppCompatActivity() {
                 this, Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
             if (!granted) requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    /**
+     * Runs the exact flow the system trigger uses - AskActivity in assistant mode,
+     * which listens, calls the endpoint and speaks the reply - without depending on
+     * the assistant role. If this works but the gesture does not, the problem is
+     * the ROM's routing, not the app.
+     */
+    private fun testVoiceAssistant() {
+        val intent = Intent(this, AskActivity::class.java).apply {
+            putExtra(AskActivity.EXTRA_FROM_ASSISTANT, true)
+        }
+        try {
+            startActivity(intent)
+        } catch (t: Throwable) {
+            toast("Could not open the assistant screen")
         }
     }
 

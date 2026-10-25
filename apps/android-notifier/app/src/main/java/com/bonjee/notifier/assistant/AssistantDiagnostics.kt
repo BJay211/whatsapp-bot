@@ -48,6 +48,16 @@ object AssistantDiagnostics {
         appendLine("services answering $VOICE_INTERACTION_ACTION: ${listed.size}")
         listed.forEach { appendLine("  - ${it.packageName}/${it.className}") }
         appendLine("this app answers that action: ${yesNo(mineListed)}")
+        val info = try {
+            context.packageManager.getServiceInfo(ours, 0)
+        } catch (t: Throwable) {
+            null
+        }
+        appendLine("service declared exported: ${yesNo(info?.exported == true)}")
+        appendLine(
+            "service bound by permission: " +
+                (info?.permission?.takeIf { it.isNotBlank() } ?: "NONE (the system will ignore it)"),
+        )
         appendLine()
 
         // ---- the session component named by the config -------------------
@@ -74,6 +84,9 @@ object AssistantDiagnostics {
         appendLine("assistant role available on this device: ${yesNo(AssistantRole.isRoleAvailable(context))}")
         appendLine("role currently held by this app: ${yesNo(AssistantRole.holdsRole(context))}")
         appendLine("effective default (role or setting): ${yesNo(AssistantRole.isDefault(context))}")
+        appendLine("role holders now: ${roleHolders(context).ifEmpty { listOf("none") }.joinToString()}")
+        appendLine("system role dialog resolvable: ${yesNo(roleDialogResolvable(context))}")
+        appendLine("assistant settings screen resolvable: ${yesNo(pickerResolvable(context))}")
         appendLine("Settings.Secure $SETTINGS_KEY = ${currentDefault(context)}")
         appendLine()
 
@@ -94,8 +107,12 @@ object AssistantDiagnostics {
             when {
                 !mineListed ->
                     "This build is NOT registered as a VoiceInteractionService in the " +
-                        "running package. If the version above is not 2.2, the update did " +
+                        "running package. If the version above is not 2.3, the update did " +
                         "not install - reinstall the new APK."
+                !roleDialogResolvable(context) && !AssistantRole.isDefault(context) ->
+                    "JARVIS is registered but this ROM has no assistant role dialog. " +
+                        "Open Settings > Apps > Default apps > Digital assistant app and " +
+                        "pick JARVIS (Bonjee) by hand."
                 !AssistantRole.isDefault(context) ->
                     "The system can see JARVIS but it is not the selected assistant. " +
                         "Tap SET AS DEFAULT ASSISTANT and accept the Android dialog."
@@ -103,6 +120,37 @@ object AssistantDiagnostics {
                     "JARVIS is the active assistant on this device."
             },
         )
+    }
+
+    /** Every package the system currently considers the assistant. */
+    private fun roleHolders(context: Context): List<String> {
+        // RoleManager only exposes isRoleHeld() publicly; the holders list is a
+        // system API. Report what the app can legitimately read.
+        if (!AssistantRole.isRoleAvailable(context)) return emptyList()
+        return if (AssistantRole.holdsRole(context)) {
+            listOf(context.packageName)
+        } else {
+            emptyList()
+        }
+    }
+
+    /** True when some activity on the device can show the "set as assistant" dialog. */
+    private fun roleDialogResolvable(context: Context): Boolean {
+        val intent = AssistantRole.roleRequestIntent(context) ?: return false
+        return try {
+            context.packageManager.queryIntentActivities(intent, 0).isNotEmpty()
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    /** True when the OEM kept the assistant settings screen the app tries to open. */
+    private fun pickerResolvable(context: Context): Boolean = try {
+        context.packageManager
+            .queryIntentActivities(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS), 0)
+            .isNotEmpty()
+    } catch (t: Throwable) {
+        false
     }
 
     /** Every service the system would consider for the assistant role. */

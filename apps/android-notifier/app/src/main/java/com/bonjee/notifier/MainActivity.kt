@@ -120,11 +120,18 @@ class MainActivity : AppCompatActivity() {
                 ApiClient.shared.postJson(prefs.notificationUrl(), payload, prefs.headers())
             }
             binding.btnTest.isEnabled = true
+            val dashboard = withContext(Dispatchers.IO) {
+                ApiClient.shared.get(prefs.dashboardUrl("/api/health"), prefs.headers())
+            }
             binding.txtTestResult.text = buildString {
-                append("URL: ${prefs.notificationUrl()}\n")
-                append("Result: ${result.summary}\n")
-                if (result.ok) append("OK - n8n accepted the payload.")
-                else append("Check: workflow active? webhook path correct? auth header needed?")
+                append("n8n URL: ${prefs.notificationUrl()}\n")
+                append("n8n result: ${result.summary}\n")
+                if (result.ok) append("OK - n8n accepted the payload.\n")
+                else append("Check: workflow active? webhook path correct? auth header needed?\n")
+                append("Dashboard: ${prefs.dashboardUrl("/api/health")}\n")
+                append("Dashboard result: ${dashboard.summary}\n")
+                if (dashboard.ok) append("OK - the dashboard answers, the side menu will load live data.")
+                else append("Check: Dashboard URL set? service deployed on Render?")
             }
             prefs.lastDeliveryOk = result.ok
             prefs.lastDeliveryAt = System.currentTimeMillis()

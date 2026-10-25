@@ -48,7 +48,9 @@ class Prefs private constructor(context: Context) {
         get() = sp.getString(KEY_DASHBOARD_URL, BuildConfig.DEFAULT_DASHBOARD_URL)
             ?: BuildConfig.DEFAULT_DASHBOARD_URL
         set(value) {
-            sp.edit().putString(KEY_DASHBOARD_URL, cleanBase(value)).apply()
+            sp.edit()
+                .putString(KEY_DASHBOARD_URL, cleanBase(value, BuildConfig.DEFAULT_DASHBOARD_URL))
+                .apply()
         }
 
     fun dashboardUrl(path: String = "/"): String =
@@ -141,9 +143,9 @@ class Prefs private constructor(context: Context) {
                 instance ?: Prefs(context.applicationContext).also { instance = it }
             }
 
-        fun cleanBase(url: String): String {
+        fun cleanBase(url: String, fallback: String = BuildConfig.DEFAULT_N8N_BASE_URL): String {
             var u = url.trim()
-            if (u.isEmpty()) return BuildConfig.DEFAULT_N8N_BASE_URL
+            if (u.isEmpty()) return fallback
             if (!u.startsWith("http://") && !u.startsWith("https://")) u = "https://$u"
             return u.trimEnd('/')
         }

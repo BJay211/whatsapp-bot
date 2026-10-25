@@ -96,13 +96,17 @@ services:
       - key: EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS
         value: true
 
-  # Next.js Dashboard
+  # Next.js Dashboard (Bonjee OS web cockpit)
   - type: web
     name: bonjee-dashboard
     runtime: node
     plan: starter
-    buildCommand: cd apps/dashboard && npm install && npm run build
-    startCommand: cd apps/dashboard && npm start
+    rootDir: apps/dashboard
+    # `next build` needs devDependencies, and NODE_ENV=production would skip
+    # them on a plain `npm install`, so include dev explicitly.
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -116,6 +120,20 @@ services:
           name: bonjee-n8n
           property: host
         format: https://%s
+      - key: EVOLUTION_API_URL
+        fromService:
+          type: web
+          name: bonjee-evolution
+          property: host
+        format: https://%s
+      - key: EVOLUTION_API_KEY
+        fromService:
+          type: web
+          name: bonjee-evolution
+          envVarKey: AUTHENTICATION_API_KEY
+      # Fill this in the Render dashboard to lock the cockpit behind a passphrase.
+      - key: DASHBOARD_PASSPHRASE
+        sync: false
       - key: NEXTAUTH_SECRET
         generateValue: true
       - key: NEXTAUTH_URL

@@ -64,7 +64,41 @@ Run [`db/schema.sql`](./db/schema.sql) once against the `bonjee-db` database
 (TablePlus / DBeaver / pgAdmin using the **External** Database URL from Render).
 The workflow needs the `messages` and `notifications` tables.
 
-### 4. Android app
+### 4. Dashboard (Bonjee OS web cockpit)
+
+The Next.js dashboard reads the **same** `bonjee-db` Postgres that n8n writes to, so
+WhatsApp messages and Android notifications show up on the web without any extra sync.
+
+Render service settings (`bonjee-dashboard`):
+
+| Setting | Value |
+|---|---|
+| Root directory | `apps/dashboard` |
+| Build command | `npm install --include=dev && npm run build` |
+| Start command | `npm start` |
+| Health check path | `/api/health` |
+
+Environment variables:
+
+| Key | Value |
+|---|---|
+| `DATABASE_URL` | Internal Database URL of `bonjee-db` |
+| `N8N_BASE_URL` | `https://bonjee-n8n.onrender.com` |
+| `EVOLUTION_API_URL` | `https://bonjee-evolution.onrender.com` |
+| `EVOLUTION_API_KEY` | the Evolution `AUTHENTICATION_API_KEY` |
+| `DASHBOARD_PASSPHRASE` | optional - locks the cockpit behind a passphrase |
+| `NODE_ENV` | `production` |
+
+`https://<your-dashboard>/api/health` reports exactly what is wired up:
+
+```json
+{"ok":true,"mode":"live","postgres":"SELECT 1 succeeded","n8n":"reachable","evolution":"reachable"}
+```
+
+`"mode":"demo"` means `DATABASE_URL` is missing or unreachable - the dashboard then
+shows sample data instead of failing.
+
+### 5. Android app
 
 See [`apps/android-notifier/README.md`](./apps/android-notifier/README.md).
 
@@ -80,11 +114,17 @@ Copy it to your phone, install it, then:
 1. Base URL: `https://bonjee-n8n.onrender.com`
 2. Notification path: `/webhook/notifications-ingest`
 3. Ask path: `/webhook/personal-ai-ask`
-4. **Save settings -> Test connection -> Grant notification access -> Start capture service**
+4. Dashboard URL: `https://bonjee-dashboard.onrender.com` (the side menu opens
+   Inbox, Tasks, Calendar, Automations, Memory, Devices and Settings from there)
+5. **Save settings -> Test connection -> Grant notification access -> Start capture service**
+
+The home screen is the glowing energy core. Tap the core to speak (a waveform
+appears while it listens), or switch to **TYPE** to send a written command. Tap the
+menu button - or swipe in from the left edge - to open the side drawer.
 
 No Android Studio is required anywhere in that flow.
 
-### 5. WhatsApp (Evolution API)
+### 6. WhatsApp (Evolution API)
 
 Point the instance webhook at
 `https://bonjee-n8n.onrender.com/webhook/personal-ai-whatsapp`

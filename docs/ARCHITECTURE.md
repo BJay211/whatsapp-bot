@@ -39,7 +39,9 @@ Device Commands screen and spoken for "what can you do").
 | Group | Examples | How it works |
 | :-- | :-- | :-- |
 | Apps | `open WhatsApp`, `launch Gmail` | Resolves launcher activities through `<queries>` (MAIN/LAUNCHER), no `QUERY_ALL_PACKAGES` |
-| Calls / texts | `call mum`, `text John saying I am coming` | Contacts lookup + `ACTION_CALL` (falls back to `ACTION_DIAL` without `CALL_PHONE`) |
+| Calls / texts | `call mum`, `text John saying I am coming` | Contacts lookup + `ACTION_CALL` (falls back to `ACTION_DIAL` without `CALL_PHONE`); SMS is sent directly once `SEND_SMS` is granted, otherwise composed |
+| WhatsApp | `call John on WhatsApp`, `whatsapp Ada saying hello` | Opens the chat via `wa.me`; `TapAssistService` (optional accessibility helper) presses call/send inside WhatsApp, which has no public API for either |
+| Contacts | `search contacts for Ada`, `what is John's number` | Searchable contact screen with call / WhatsApp call / video / WhatsApp message / SMS |
 | Screen / sound | `brightness 60 percent`, `volume up`, `mute` | `Settings.System` when "Modify system settings" is granted, otherwise window brightness; `AudioManager` for volume/ringer |
 | Quick controls | `torch on`, `next song`, `set alarm for 6:30 am` | Camera2 torch, media key events, `AlarmClock` / calendar insert intents |
 | Search | `youtube ...`, `navigate to ...`, `search for ...` | `ACTION_VIEW` deep links to the installed app or browser |

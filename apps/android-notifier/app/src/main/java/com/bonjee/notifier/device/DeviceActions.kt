@@ -20,6 +20,8 @@ import android.provider.Settings
 import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 import com.bonjee.notifier.NotificationListener
+import com.bonjee.notifier.ui.ContactsActivity
+import com.bonjee.notifier.ui.SetupAccessActivity
 import java.util.Calendar
 import java.util.Locale
 
@@ -48,6 +50,9 @@ object DeviceActions {
         /** Android needs the user to confirm something on a settings screen. */
         data class NeedsSettings(val intent: Intent, val why: String) : Result()
 
+        /** Opens one of our own screens; the message explains what it is for. */
+        data class Open(val intent: Intent, val message: String) : Result()
+
         /** Not a device command - send it to n8n as usual. */
         object NotHandled : Result()
     }
@@ -60,6 +65,7 @@ object DeviceActions {
         val q = normalise(text)
 
         return help(q)
+            ?: accessSetup(activity, q)
             ?: permissionRequest(activity, q)
             ?: alarmAndTimer(activity, text, q)
             ?: reminder(activity, text, q)
@@ -71,6 +77,7 @@ object DeviceActions {
             ?: systemPanel(activity, q)
             ?: deviceInfo(activity, text, q)
             ?: notifications(activity, q)
+            ?: contactSearch(activity, text, q)
             ?: searchAndNavigate(activity, text, q)
             ?: openApp(activity, text, q)
             ?: Result.NotHandled
@@ -86,6 +93,72 @@ object DeviceActions {
         )
         return if (asks.contains(q)) Result.Done(CommandCatalog.summary()) else null
     }
+
+    // --------------------------------------------------------- access setup
+
+    /**
+     * "set up access" opens the guided screen; "check my access" reads out the
+     * current state. Both exist because the toggles live in different Settings
+     * pages that are hard to find by hand on MIUI/HyperOS.
+     */
+    private fun accessSetup(activity: Activity, q: String): Result? {
+        val opens = listOf(
+            "set up access", "setup access", "set up my access", "allow access",
+            "grant access", "fix my access", "fix permissions", "set up permissions",
+            "connect my access", "access setup", "give yourself access",
+            "allow everything", "set up jarvis",
+        )
+        if (opens.any { q == it || q.startsWith("$it ") }) {
+            return Result.Open(
+                Intent(activity, SetupAccessActivity::class.java),
+                "Opening Set Up Access. One screen per permission, and it shows YES as soon as each one is on.",
+            )
+        }
+
+        val checks = listOf(
+            "check my access", "check access", "what access do you have",
+            "what permissions do you have", "my permissions", "check permissions",
+        )
+        if (!checks.any { q == it || q.startsWith("$it ") }) return null
+
+        val audio = activity.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val dnd = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            (activity.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager)
+                ?.isNotificationPolicyAccessGranted == true
+        } else {
+            true
+        }
+        return Result.Done(
+            buildString {
+                appendLine("ACCESS")
+                appendLine("  notifications: ${yesNo(NotificationListener.isEnabled(activity))}")
+                appendLine("  microphone: ${yesNo(has(activity, Manifest.permission.RECORD_AUDIO))}")
+                appendLine("  contacts: ${yesNo(has(activity, Manifest.permission.READ_CONTACTS))}")
+                appendLine("  phone calls: ${yesNo(has(activity, Manifest.permission.CALL_PHONE))}")
+                appendLine("  camera / torch: ${yesNo(has(activity, Manifest.permission.CAMERA))}")
+                appendLine("  brightness (system settings): ${yesNo(canWriteSystem(activity))}")
+                appendLine("  do not disturb: ${yesNo(dnd)}")
+                appendLine("  send sms directly: ${yesNo(has(activity, Manifest.permission.SEND_SMS))}")
+                appendLine("  whatsapp tap assist: ${yesNo(TapAssistService.isEnabled(activity))}")
+                append("  ringer mode: ${ringerLabel(audio)}")
+                appendLine()
+                appendLine()
+                append("Say \"set up access\" and I will open the screens one by one.")
+            },
+        )
+    }
+
+    private fun ringerLabel(audio: AudioManager?): String = try {
+        when (audio?.ringerMode) {
+            AudioManager.RINGER_MODE_SILENT -> "silent"
+            AudioManager.RINGER_MODE_VIBRATE -> "vibrate"
+            else -> "normal"
+        }
+    } catch (t: Throwable) {
+        "unknown"
+    }
+
+    private fun yesNo(value: Boolean) = if (value) "YES" else "no"
 
     // ---------------------------------------------------------- permissions
 
@@ -144,6 +217,16 @@ object DeviceActions {
                 Result.NeedsSettings(
                     Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS),
                     "Switch JARVIS on in Notification access so I can read your notifications.",
+                )
+            }
+        }
+        if (matchesAny(q, "allow sms", "allow messages", "grant sms", "allow send sms")) {
+            return if (has(activity, Manifest.permission.SEND_SMS)) {
+                Result.Done("SMS permission is already allowed.")
+            } else {
+                Result.NeedsPermission(
+                    Manifest.permission.SEND_SMS,
+                    "Allow SMS and I will send texts without opening the messaging app.",
                 )
             }
         }
@@ -255,10 +338,15 @@ object DeviceActions {
         }
 
         if (q.contains("auto")) {
+            requireWriteSettings(
+                activity,
+                "Auto brightness needs \"Modify system settings\". Find JARVIS on the " +
+                    "next screen and switch it on - I will retry automatically.",
+            )?.let { return it }
             if (!canWriteSystem(activity)) {
-                return Result.NeedsSettings(
-                    writeSettingsIntent(activity),
-                    "Android needs \"Modify system settings\" before I can switch on auto brightness.",
+                return Result.Done(
+                    "Auto brightness still needs \"Modify system settings\". " +
+                        "Say \"set up access\" and I will take you straight there.",
                 )
             }
             Settings.System.putInt(
@@ -300,17 +388,35 @@ object DeviceActions {
                     Settings.System.SCREEN_BRIGHTNESS,
                     value,
                 )
-                return Result.Done("Brightness set to $percent%.")
+                return Result.Done("Brightness set to $percent% for the whole phone.")
             } catch (t: Throwable) {
                 // Fall through to the window-only change.
             }
+        } else {
+            // First attempt: walk the user to the switch instead of silently
+            // pretending. After that, do what is possible and say what it did.
+            requireWriteSettings(
+                activity,
+                "Brightness needs \"Modify system settings\". Find JARVIS on the next " +
+                    "screen and switch it on - I will retry automatically.",
+            )?.let { return it }
         }
         val attrs = activity.window.attributes
         attrs.screenBrightness = (percent / 100f).coerceIn(0.05f, 1f)
         activity.window.attributes = attrs
         return Result.Done(
-            "Brightness $percent% for this screen. Say \"allow system settings\" to change the whole phone.",
+            "Brightness $percent% for this screen only. " +
+                "For the whole phone say \"set up access\" and allow \"Modify system settings\".",
         )
+    }
+
+    /** Asks for WRITE_SETTINGS once, then stops nagging. */
+    private fun requireWriteSettings(activity: Activity, why: String): Result.NeedsSettings? {
+        if (canWriteSystem(activity)) return null
+        val sp = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (sp.getBoolean(KEY_ASKED_WRITE, false)) return null
+        sp.edit().putBoolean(KEY_ASKED_WRITE, true).apply()
+        return Result.NeedsSettings(writeSettingsIntent(activity), why)
     }
 
     private fun currentBrightnessPercent(activity: Activity): Int = try {
@@ -327,8 +433,19 @@ object DeviceActions {
     private fun canWriteSystem(context: Context): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.System.canWrite(context)
 
-    private fun writeSettingsIntent(activity: Activity): Intent =
-        Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:" + activity.packageName))
+    /**
+     * Some OEMs (MIUI/HyperOS included) do not resolve the package-scoped
+     * variant. Fall back to the plain screen so the user is never dumped on a
+     * blank "app not found" dialog.
+     */
+    private fun writeSettingsIntent(activity: Activity): Intent {
+        val scoped = Intent(
+            Settings.ACTION_MANAGE_WRITE_SETTINGS,
+            Uri.parse("package:" + activity.packageName),
+        )
+        val resolvable = activity.packageManager.resolveActivity(scoped, 0) != null
+        return if (resolvable) scoped else Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
+    }
 
     // ---------------------------------------------------------------- volume
 
@@ -364,59 +481,115 @@ object DeviceActions {
         }
 
         if (hasWord(q, "mute")) {
-            rememberVolume(activity, stream, audio.getStreamVolume(stream))
-            audio.setStreamVolume(stream, 0, AudioManager.FLAG_SHOW_UI)
-            return Result.Done("$label muted.")
+            return try {
+                rememberVolume(activity, stream, audio.getStreamVolume(stream))
+                audio.setStreamVolume(stream, 0, AudioManager.FLAG_SHOW_UI)
+                Result.Done("$label muted.")
+            } catch (t: Throwable) {
+                volumeFailure(activity, t)
+            }
         }
         if (hasWord(q, "unmute")) {
-            val max = audio.getStreamMaxVolume(stream)
-            val restore = rememberedVolume(activity, stream)
-                .coerceIn(1, max)
-                .let { if (it <= 0) (max / 2).coerceAtLeast(1) else it }
-            audio.setStreamVolume(stream, restore, AudioManager.FLAG_SHOW_UI)
-            return Result.Done("$label back to ${percentOf(audio, stream, restore)}%.")
+            return try {
+                val max = audio.getStreamMaxVolume(stream)
+                val restore = rememberedVolume(activity, stream)
+                    .coerceIn(1, max)
+                    .let { if (it <= 0) (max / 2).coerceAtLeast(1) else it }
+                audio.setStreamVolume(stream, restore, AudioManager.FLAG_SHOW_UI)
+                Result.Done("$label back to ${percentOf(audio, stream, restore)}%.")
+            } catch (t: Throwable) {
+                volumeFailure(activity, t)
+            }
         }
 
-        val max = audio.getStreamMaxVolume(stream)
-        if (hasWord(q, "up") || hasWord(q, "increase") || hasWord(q, "raise") || hasWord(q, "louder")) {
-            audio.adjustStreamVolume(stream, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
-        } else if (hasWord(q, "down") || hasWord(q, "decrease") || hasWord(q, "lower") ||
-            hasWord(q, "reduce") || hasWord(q, "quieter")
-        ) {
-            audio.adjustStreamVolume(stream, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
-        } else if (hasWord(q, "max") || q.contains("full")) {
-            audio.setStreamVolume(stream, max, AudioManager.FLAG_SHOW_UI)
-        } else {
-            val percent = percentIn(text) ?: return Result.Done(
-                "Say \"volume up\", \"volume down\" or \"volume 60 percent\".",
+        val max = try {
+            audio.getStreamMaxVolume(stream)
+        } catch (t: Throwable) {
+            return volumeFailure(activity, t)
+        }
+        val before = try {
+            audio.getStreamVolume(stream)
+        } catch (t: Throwable) {
+            -1
+        }
+
+        return try {
+            if (hasWord(q, "up") || hasWord(q, "increase") || hasWord(q, "raise") || hasWord(q, "louder")) {
+                audio.adjustStreamVolume(stream, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+            } else if (hasWord(q, "down") || hasWord(q, "decrease") || hasWord(q, "lower") ||
+                hasWord(q, "reduce") || hasWord(q, "quieter")
+            ) {
+                audio.adjustStreamVolume(stream, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+            } else if (hasWord(q, "max") || q.contains("full")) {
+                audio.setStreamVolume(stream, max, AudioManager.FLAG_SHOW_UI)
+            } else {
+                val percent = percentIn(text) ?: return Result.Done(
+                    "Say \"volume up\", \"volume down\" or \"volume 60 percent\".",
+                )
+                audio.setStreamVolume(
+                    stream,
+                    (percent * max / 100).coerceIn(0, max),
+                    AudioManager.FLAG_SHOW_UI,
+                )
+            }
+            val after = audio.getStreamVolume(stream)
+            val pctFrom = if (before < 0 || max <= 0) null else before * 100 / max
+            val pctTo = percentOf(audio, stream, after)
+            val hint = if (stream == AudioManager.STREAM_MUSIC && audio.ringerMode != AudioManager.RINGER_MODE_NORMAL) {
+                " The phone is on ${ringerLabel(audio)} - say \"sound on\" to hear it."
+            } else {
+                ""
+            }
+            Result.Done(
+                if (pctFrom == null) "$label $pctTo%.$hint"
+                else "$label $pctFrom% \u2192 $pctTo%.$hint",
             )
-            audio.setStreamVolume(
-                stream,
-                (percent * max / 100).coerceIn(0, max),
-                AudioManager.FLAG_SHOW_UI,
+        } catch (t: Throwable) {
+            volumeFailure(activity, t)
+        }
+    }
+
+    /**
+     * Volume changes can throw on ROMs with strict audio policy (Xiaomi, Samsung
+     * work profiles). Never let that kill the assistant's answer.
+     */
+    private fun volumeFailure(activity: Activity, t: Throwable): Result {
+        return if (t is SecurityException) {
+            Result.NeedsSettings(
+                Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
+                "Android blocked the volume change. Allow Do Not Disturb access and I can control it.",
+            )
+        } else {
+            Result.Done(
+                "The phone refused the volume change (${t.javaClass.simpleName}). " +
+                    "Try the volume buttons, or say \"set up access\".",
             )
         }
-        return Result.Done("$label ${percentOf(audio, stream, audio.getStreamVolume(stream))}%.")
     }
 
     private fun setRinger(activity: Activity, audio: AudioManager, mode: Int, message: String): Result {
         return try {
             audio.ringerMode = mode
             Result.Done(message)
-        } catch (t: SecurityException) {
+        } catch (t: Throwable) {
             if (mode == AudioManager.RINGER_MODE_NORMAL) {
                 Result.Done("Android refused to change the ringer mode.")
             } else {
                 Result.NeedsSettings(
                     Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
-                    "Allow Do Not Disturb access and I can silence the phone for you.",
+                    "Allow Do Not Disturb access and I can silence the phone for you. " +
+                        "Say \"set up access\" to do all the permissions at once.",
                 )
             }
         }
     }
 
     private fun percentOf(audio: AudioManager, stream: Int, value: Int): Int {
-        val max = audio.getStreamMaxVolume(stream)
+        val max = try {
+            audio.getStreamMaxVolume(stream)
+        } catch (t: Throwable) {
+            return 0
+        }
         if (max <= 0) return 0
         return value * 100 / max
     }
@@ -513,6 +686,20 @@ object DeviceActions {
     private fun callOrMessage(activity: Activity, text: String, q: String): Result? {
         val lower = text.lowercase(Locale.getDefault())
 
+        // WhatsApp call - must come before the plain "call" pattern, otherwise
+        // "call John on WhatsApp" would dial his number instead.
+        Regex("""^(?:whatsapp|wa)\s+(video\s+)?call\s+(.+)$""").find(lower)?.let { match ->
+            val video = match.groupValues[1].isNotBlank()
+            return whatsappCall(activity, match.groupValues[2].trim(), video)
+        }
+        Regex("""^(?:call|ring)\s+(.+?)\s+(?:on|via|in|through)\s+whatsapp(\s+video)?$""")
+            .find(lower)?.let { match ->
+                return whatsappCall(activity, match.groupValues[1].trim(), match.groupValues[2].isNotBlank())
+            }
+        Regex("""^(?:video\s+call|video)\s+(.+?)\s+(?:on|via|in)\s+whatsapp$""").find(lower)?.let { match ->
+            return whatsappCall(activity, match.groupValues[1].trim(), video = true)
+        }
+
         // call / dial
         val callMatch = Regex("""^(?:please\s+)?(?:call|dial|phone)\s+(.+)$""").find(lower)
         if (callMatch != null) {
@@ -522,14 +709,16 @@ object DeviceActions {
             return placeCall(activity, target)
         }
 
-        // whatsapp
+        // whatsapp message
         val waMatch = Regex("""^(?:send\s+(?:a\s+)?whatsapp(?:\s+message)?\s+to|whatsapp|message\s+on\s+whatsapp)\s+(.+)$""")
             .find(lower)
-        if (waMatch != null) return whatsapp(activity, waMatch.groupValues[1])
+        if (waMatch != null) {
+            return whatsapp(activity, waMatch.groupValues[1], sendNow = lower.startsWith("send"))
+        }
 
         // text / sms
         val smsMatch = Regex(
-            """^(?:send\s+(?:a\s+)?(?:text|sms|message)\s+to|text|sms|message)\s+(.+)$""",
+            """^(?:send\s+(?:an?\s+)?(?:text|sms|message)\s+to|text|sms|message)\s+(.+)$""",
         ).find(lower)
         if (smsMatch != null) return sendText(activity, smsMatch.groupValues[1])
 
@@ -540,20 +729,78 @@ object DeviceActions {
         return null
     }
 
-    private fun placeCall(activity: Activity, target: String): Result {
+    /**
+     * WhatsApp voice/video call.
+     *
+     * WhatsApp exposes no intent for calling, so the assistant opens the chat and
+     * arms [TapAssistService]; when tap assist is enabled the service presses the
+     * call button, otherwise the user is told exactly which icon to tap.
+     */
+    private fun whatsappCall(activity: Activity, target: String, video: Boolean): Result {
+        if (target.isBlank()) return Result.Done("Who should I call on WhatsApp?")
         val digits = digitsOf(target)
+        val number = if (digits.length >= 3) {
+            digits
+        } else {
+            if (!has(activity, Manifest.permission.READ_CONTACTS)) {
+                return Result.NeedsPermission(
+                    Manifest.permission.READ_CONTACTS,
+                    "I need contacts access to find \"$target\" on WhatsApp.",
+                )
+            }
+            contactNumber(activity, target)
+        }
+        val label = if (number == null) target else target.trim()
+
+        if (number == null) {
+            val app = resolveApp(activity, "whatsapp")
+            return if (app != null && launch(activity, app)) {
+                Result.Done(
+                    "I don't have \"$target\" in your contacts. Opening WhatsApp so you can pick them.",
+                )
+            } else {
+                Result.Done("I don't have \"$target\" in your contacts and WhatsApp isn't installed.")
+            }
+        }
+
+        val url = "https://wa.me/" + number.filter { it.isDigit() }
+        if (!tryStart(activity, Intent(Intent.ACTION_VIEW, Uri.parse(url)))) {
+            return Result.Done("No app handled that WhatsApp link.")
+        }
+        val kind = if (video) "video call" else "call"
+        return if (TapAssistService.isEnabled(activity)) {
+            TapAssistService.request(
+                if (video) TapAssistService.Action.VIDEO_CALL else TapAssistService.Action.VOICE_CALL,
+            )
+            Result.Done("Opening $label's chat and starting the WhatsApp $kind.")
+        } else {
+            Result.Done(
+                "Opening $label's chat. Tap the ${if (video) "video" else "call"} icon to start the " +
+                    "WhatsApp $kind - WhatsApp does not let apps start calls by themselves. " +
+                    "Say \"set up access\" and enable tap assist, then I can press it for you.",
+            )
+        }
+    }
+
+    private fun placeCall(activity: Activity, target: String): Result {
+        // "call mum on phone" -> "mum"
+        val cleaned = target
+            .replace(Regex("""\s+(?:on|via)\s+(?:the\s+)?(?:phone|mobile|cell|line)$"""), "")
+            .trim()
+            .ifEmpty { target.trim() }
+        val digits = digitsOf(cleaned)
         if (digits.length >= 3) {
-            return startCall(activity, digits, target.trim())
+            return startCall(activity, digits, cleaned)
         }
         if (!has(activity, Manifest.permission.READ_CONTACTS)) {
             return Result.NeedsPermission(
                 Manifest.permission.READ_CONTACTS,
-                "I need contacts access to find \"${target.trim()}\".",
+                "I need contacts access to find \"$cleaned\".",
             )
         }
-        val number = contactNumber(activity, target)
-            ?: return Result.Done("I couldn't find \"${target.trim()}\" in your contacts.")
-        return startCall(activity, number, target.trim())
+        val number = contactNumber(activity, cleaned)
+            ?: return Result.Done("I couldn't find \"$cleaned\" in your contacts.")
+        return startCall(activity, number, cleaned)
     }
 
     private fun startCall(activity: Activity, number: String, label: String): Result {
@@ -586,16 +833,38 @@ object DeviceActions {
             contactNumber(activity, who)
                 ?: return Result.Done("I couldn't find \"$who\" in your contacts.")
         }
+        // With SEND_SMS granted the message goes out immediately; otherwise it is
+        // composed and waits for the user to press send, as before.
+        if (body.isNotBlank() && has(activity, Manifest.permission.SEND_SMS)) {
+            try {
+                smsManager(activity).sendTextMessage(number, null, body, null, null)
+                return Result.Done("Text sent to $who.")
+            } catch (t: Throwable) {
+                // Fall through to the composer if the carrier or ROM refuses.
+            }
+        }
         val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number"))
         if (body.isNotBlank()) intent.putExtra("sms_body", body)
         return if (tryStart(activity, intent)) {
-            Result.Done(if (body.isBlank()) "Text to $who ready." else "Text to $who ready to send.")
+            Result.Done(
+                if (body.isBlank()) "Text to $who ready."
+                else "Text to $who ready. Say \"allow sms\" and I will send it without opening the app.",
+            )
         } else {
             Result.Done("No messaging app handled that.")
         }
     }
 
-    private fun whatsapp(activity: Activity, rest: String): Result {
+    @Suppress("DEPRECATION")
+    private fun smsManager(activity: Activity): android.telephony.SmsManager =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            activity.getSystemService(android.telephony.SmsManager::class.java)
+                ?: android.telephony.SmsManager.getDefault()
+        } else {
+            android.telephony.SmsManager.getDefault()
+        }
+
+    private fun whatsapp(activity: Activity, rest: String, sendNow: Boolean): Result {
         val (who, body) = splitMessage(rest)
         if (who.isBlank()) return Result.Done("Who should I message on WhatsApp?")
         val digits = digitsOf(who)
@@ -625,10 +894,19 @@ object DeviceActions {
         } else {
             ""
         }
-        return if (tryStart(activity, Intent(Intent.ACTION_VIEW, Uri.parse(url)))) {
-            Result.Done(if (body.isBlank()) "Opening WhatsApp chat with $who." else "WhatsApp message to $who ready.")
+        if (!tryStart(activity, Intent(Intent.ACTION_VIEW, Uri.parse(url)))) {
+            return Result.Done("No app handled that WhatsApp link.")
+        }
+        if (body.isBlank()) return Result.Done("Opening WhatsApp chat with $who.")
+
+        return if (sendNow && TapAssistService.isEnabled(activity)) {
+            TapAssistService.request(TapAssistService.Action.SEND)
+            Result.Done("Sending the WhatsApp message to $who.")
         } else {
-            Result.Done("No app handled that WhatsApp link.")
+            Result.Done(
+                "WhatsApp chat with $who is open with the message typed. Tap send - or enable " +
+                    "tap assist in \"set up access\" and I will send it myself next time.",
+            )
         }
     }
 
@@ -772,6 +1050,57 @@ object DeviceActions {
         } else {
             Result.Done("Latest notifications:\n" + recent.joinToString("\n") { "- $it" })
         }
+    }
+
+    // ------------------------------------------------------- contact search
+
+    /**
+     * "search contacts for John", "find Ada in contacts", "what is John's number".
+     *
+     * Opens the Contacts screen with the name already typed, where the user can
+     * pick call / WhatsApp call / WhatsApp message / SMS / email without
+     * remembering any command syntax.
+     */
+    private fun contactSearch(activity: Activity, text: String, q: String): Result? {
+        val lower = text.lowercase(Locale.getDefault())
+        var name: String? = null
+
+        Regex("""^(?:search|find|look\s*up)\s+(?:for\s+)?(.+?)\s+(?:in|on|from)\s+(?:my\s+)?contacts?$""")
+            .find(lower)?.let { name = it.groupValues[1] }
+
+        if (name == null) {
+            Regex("""^(?:search\s+)?(?:my\s+)?contacts?\s+(?:for|named?)\s+(.+)$""")
+                .find(lower)?.let { name = it.groupValues[1] }
+        }
+
+        if (name == null) {
+            Regex("""^(?:find|look\s*up|search)\s+(.+?)(?:'s|s)?\s+(?:phone\s+|mobile\s+)?number$""")
+                .find(lower)?.let { name = it.groupValues[1] }
+        }
+
+        if (name == null) {
+            Regex("""^what(?:'s|\s+is)\s+(.+?)(?:'s|s)?\s+(?:phone\s+|mobile\s+)?number\??$""")
+                .find(lower)?.let { name = it.groupValues[1] }
+        }
+
+        if (name == null) {
+            val opens = listOf(
+                "search contacts", "contact search", "open contacts search",
+                "find a contact", "search my contacts", "contacts search",
+            )
+            if (opens.any { q == it || q.startsWith("$it ") }) name = ""
+        }
+
+        if (name == null) return null
+
+        val clean = name!!.trim().removeSuffix("?").trim()
+        val intent = Intent(activity, ContactsActivity::class.java)
+        if (clean.isNotEmpty()) intent.putExtra(ContactsActivity.EXTRA_QUERY, clean)
+        return Result.Open(
+            intent,
+            if (clean.isEmpty()) "Opening contacts. Type a name, then choose call, WhatsApp or SMS."
+            else "Searching your contacts for \"$clean\".",
+        )
     }
 
     // ---------------------------------------------------- search / navigate
@@ -1273,4 +1602,5 @@ object DeviceActions {
     }
 
     private const val PREFS = "bonjee_device_actions"
+    private const val KEY_ASKED_WRITE = "asked_write_settings"
 }

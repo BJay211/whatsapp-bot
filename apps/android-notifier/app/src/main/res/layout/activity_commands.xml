@@ -39,6 +39,22 @@
             android:textSize="12sp" />
 
         <Button
+            android:id="@+id/btnGuidedSetup"
+            style="@style/JarvisButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="SET UP ACCESS (GUIDED)" />
+
+        <Button
+            android:id="@+id/btnContactsSearch"
+            style="@style/JarvisButton.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="SEARCH CONTACTS" />
+
+        <Button
             android:id="@+id/btnWriteSettings"
             style="@style/JarvisButton.Outlined"
             android:layout_width="match_parent"

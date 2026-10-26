@@ -11,8 +11,8 @@ android {
         applicationId "com.bonjee.notifier"
         minSdk 21
         targetSdk 34
-        versionCode 9
-        versionName "2.7"
+        versionCode 11
+        versionName "2.9"
 
         buildConfigField "String", "DEFAULT_N8N_BASE_URL", "\"https://bonjee-n8n.onrender.com\""
         buildConfigField "String", "DEFAULT_NOTIFICATION_PATH", "\"/webhook/notifications-ingest\""

@@ -39,6 +39,14 @@
                 android:id="@+id/nav_commands"
                 android:icon="@android:drawable/ic_menu_view"
                 android:title="Device Commands" />
+            <item
+                android:id="@+id/nav_setup_access"
+                android:icon="@android:drawable/ic_lock_lock"
+                android:title="Set Up Access" />
+            <item
+                android:id="@+id/nav_contacts"
+                android:icon="@android:drawable/ic_menu_call"
+                android:title="Contacts" />
         </menu>
     </item>
 

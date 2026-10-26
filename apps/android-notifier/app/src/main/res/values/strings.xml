@@ -8,4 +8,6 @@
       scroll past when looking for the app.
     -->
     <string name="assistant_service_label">JARVIS (Bonjee)</string>
+    <string name="tap_assist_label">JARVIS tap assist</string>
+    <string name="tap_assist_description">Lets JARVIS press the call or send button inside WhatsApp after you ask it to. It only acts when you ask, only inside WhatsApp, and never reads passwords or other apps.</string>
 </resources>

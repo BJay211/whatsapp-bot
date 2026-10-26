@@ -35,6 +35,13 @@ class CommandsActivity : AppCompatActivity() {
 
         binding.txtCommands.text = CommandCatalog.fullText()
 
+        binding.btnGuidedSetup.setOnClickListener {
+            startActivity(Intent(this, SetupAccessActivity::class.java))
+        }
+        binding.btnContactsSearch.setOnClickListener {
+            startActivity(Intent(this, ContactsActivity::class.java))
+        }
+
         binding.btnWriteSettings.setOnClickListener {
             if (canWriteSystem()) {
                 toast("Brightness control is already allowed")

@@ -228,7 +228,17 @@ class AskActivity : AppCompatActivity() {
      * archived-question behaviour is unchanged.
      */
     private fun submit(question: String) {
-        when (val outcome = DeviceActions.handle(this, question)) {
+        val outcome = try {
+            DeviceActions.handle(this, question)
+        } catch (t: Throwable) {
+            // A device command must never take the whole assistant down.
+            present(
+                "I couldn't run that (${t.javaClass.simpleName}). " +
+                    "Say \"set up access\" to check my permissions, or ask me a question.",
+            )
+            return
+        }
+        when (outcome) {
             is DeviceActions.Result.Done -> {
                 settingsShownOnce = false
                 present(outcome.message)
@@ -237,6 +247,14 @@ class AskActivity : AppCompatActivity() {
                 requestDevicePermission(outcome.permission, outcome.why, question)
             is DeviceActions.Result.NeedsSettings ->
                 openRequiredSetting(outcome.intent, outcome.why, question)
+            is DeviceActions.Result.Open -> {
+                present(outcome.message)
+                try {
+                    startActivity(outcome.intent)
+                } catch (t: Throwable) {
+                    // Screen missing (should not happen) - the message still explains it.
+                }
+            }
             DeviceActions.Result.NotHandled -> askBackend(question)
         }
     }
@@ -272,7 +290,13 @@ class AskActivity : AppCompatActivity() {
         speak(why)
         if (settingsShownOnce) {
             // The user came back from that screen and it is still not granted.
+            // Say so instead of leaving a stale "opening..." message.
             settingsShownOnce = false
+            binding.txtAnswer.text = buildString {
+                append(why)
+                append("\n\nStill not allowed. Say \"set up access\" for a guided list, ")
+                append("or open it yourself: Settings > Apps > JARVIS.")
+            }
             return
         }
         settingsShownOnce = true

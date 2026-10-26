@@ -76,6 +76,9 @@ class MainActivity : AppCompatActivity() {
         binding.btnSetAssistant.setOnClickListener { requestAssistantRole() }
         binding.btnAssistantDiagnostics.setOnClickListener { showAssistantDiagnostics() }
         binding.btnTestAssistant.setOnClickListener { testVoiceAssistant() }
+        binding.btnSetupAccess.setOnClickListener {
+            startActivity(Intent(this, com.bonjee.notifier.ui.SetupAccessActivity::class.java))
+        }
         binding.btnDeviceCommands.setOnClickListener {
             startActivity(Intent(this, com.bonjee.notifier.ui.CommandsActivity::class.java))
         }

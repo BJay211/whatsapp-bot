@@ -27,9 +27,14 @@ object CommandCatalog {
             listOf(
                 "call mum",
                 "call 0803 123 4567",
+                "call John on WhatsApp",
+                "video call John on WhatsApp",
                 "text John saying I am on my way",
-                "whatsapp 0803 123 4567 saying I will call you",
+                "send a message to Ada saying see you at 5",
+                "whatsapp John saying good morning",
                 "email ada@example.com about the invoice",
+                "search contacts for Ada",
+                "what is John's number",
             ),
         ),
         Section(
@@ -98,6 +103,8 @@ object CommandCatalog {
         Section(
             "PERMISSIONS",
             listOf(
+                "set up access",
+                "check my access",
                 "allow system settings",
                 "allow contacts",
                 "allow phone",
@@ -112,13 +119,15 @@ object CommandCatalog {
         appendLine("I can run this phone myself, and still answer from your n8n archive.")
         appendLine()
         appendLine("Apps - \"open WhatsApp\", \"launch Gmail\", \"open calculator\".")
-        appendLine("Calls - \"call mum\", \"text John saying I'm coming\", \"email ada about the invoice\".")
+        appendLine("Calls - \"call mum\", \"text John saying I'm coming\", \"find Ada in contacts\".")
+        appendLine("WhatsApp - \"call John on whatsapp\", \"whatsapp Ada saying hello\".")
         appendLine("Screen - \"brightness up\", \"brightness 60 percent\", \"auto brightness\".")
         appendLine("Sound - \"volume up\", \"volume 40\", \"mute\", \"vibrate mode\", \"sound on\".")
         appendLine("Quick - \"torch on\", \"pause\", \"next song\", \"set alarm for 6:30\", \"timer 10 minutes\".")
         appendLine("Search - \"search for ...\", \"youtube ...\", \"navigate to ...\".")
         appendLine("Panels - \"wifi\", \"bluetooth\", \"location\", \"battery saver\".")
         appendLine("Info - \"battery\", \"time\", \"date\", \"storage\", \"read my notifications\".")
+        appendLine("Access - say \"set up access\" and I open each permission screen in turn.")
         append("Anything else goes to your archive exactly as before.")
     }
 
@@ -136,6 +145,12 @@ object CommandCatalog {
         appendLine("    Say \"allow system settings\" once and it stays on.")
         appendLine("  • Calls need contacts access to look people up, and phone")
         appendLine("    permission to place the call without opening the dialer.")
+        appendLine("  • WhatsApp blocks apps from starting calls or pressing send. Say")
+        appendLine("    \"set up access\" and enable \"JARVIS tap assist\" and it will")
+        appendLine("    press the call/send button for you; otherwise the chat opens")
+        appendLine("    with the message typed.")
+        appendLine("  • SMS is sent directly once the SMS permission is granted;")
+        appendLine("    without it the message is written and left for you to send.")
         append("  • Anything not listed here is sent to your n8n workflow as usual.")
     }
 }

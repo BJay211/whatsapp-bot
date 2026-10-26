@@ -264,6 +264,12 @@ class JarvisHomeActivity : AppCompatActivity() {
                 R.id.nav_commands -> {
                     startActivity(Intent(this, CommandsActivity::class.java))
                 }
+                R.id.nav_setup_access -> {
+                    startActivity(Intent(this, SetupAccessActivity::class.java))
+                }
+                R.id.nav_contacts -> {
+                    startActivity(Intent(this, ContactsActivity::class.java))
+                }
                 R.id.nav_settings -> {
                     openWebModule("/settings", "SETTINGS")
                 }

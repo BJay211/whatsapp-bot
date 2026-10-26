@@ -60,14 +60,24 @@ object AssistantDiagnostics {
         )
         appendLine()
 
-        // ---- the session component named by the config -------------------
+        // ---- the components named by the config --------------------------
         appendLine("[CONFIG]")
-        val sessionName = sessionServiceFromXml(context)
-        when {
-            sessionName == null ->
-                appendLine("res/xml/voice_interaction_service.xml: UNREADABLE")
-            else -> {
-                appendLine("sessionService declared: $sessionName")
+        val cfg = configFromXml(context)
+        val sessionName = cfg?.first
+        val recognitionName = cfg?.second
+        if (cfg == null) {
+            appendLine("res/xml/voice_interaction_service.xml: UNREADABLE")
+        } else {
+            appendLine("sessionService declared: ${sessionName ?: "MISSING"}")
+            appendLine(
+                "recognitionService declared: " + (recognitionName
+                    ?: "MISSING - Android hides the app from the picker without it"),
+            )
+            // This is the exact rule android.service.voice.VoiceInteractionServiceInfo
+            // applies before offering an app as an assistant.
+            val pickerOk = sessionName != null && recognitionName != null
+            appendLine("picker validation (session + recognition): ${if (pickerOk) "PASS" else "FAIL"}")
+            if (sessionName != null) {
                 val sessionResolvable = try {
                     context.packageManager.getServiceInfo(ComponentName(pkg, sessionName), 0)
                     true
@@ -105,9 +115,14 @@ object AssistantDiagnostics {
         appendLine("Verdict")
         appendLine(
             when {
+                cfg == null || sessionName == null || recognitionName == null ->
+                    "Android will NOT list this app: the voice-interaction config is " +
+                        "incomplete. It needs both sessionService and recognitionService. " +
+                        "Reinstall the APK - if the version above is not 2.4, the update " +
+                        "did not install."
                 !mineListed ->
                     "This build is NOT registered as a VoiceInteractionService in the " +
-                        "running package. If the version above is not 2.3, the update did " +
+                        "running package. If the version above is not 2.4, the update did " +
                         "not install - reinstall the new APK."
                 !roleDialogResolvable(context) && !AssistantRole.isDefault(context) ->
                     "JARVIS is registered but this ROM has no assistant role dialog. " +
@@ -176,23 +191,28 @@ object AssistantDiagnostics {
         }.distinct()
     }
 
-    /** Reads sessionService out of the compiled assistant config. */
-    private fun sessionServiceFromXml(context: Context): String? = try {
+    /** Reads sessionService and recognitionService out of the compiled config. */
+    private fun configFromXml(context: Context): Pair<String?, String?>? = try {
         val parser = context.resources.getXml(R.xml.voice_interaction_service)
-        var name: String? = null
+        var session: String? = null
+        var recognition: String? = null
+        var found = false
         var event = parser.eventType
         while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
             if (event == org.xmlpull.v1.XmlPullParser.START_TAG &&
                 parser.name == "voice-interaction-service"
             ) {
-                name = parser.getAttributeValue(ANDROID_NS, "sessionService")
+                session = parser.getAttributeValue(ANDROID_NS, "sessionService")
                     ?: parser.getAttributeValue(null, "sessionService")
+                recognition = parser.getAttributeValue(ANDROID_NS, "recognitionService")
+                    ?: parser.getAttributeValue(null, "recognitionService")
+                found = true
                 break
             }
             event = parser.next()
         }
         parser.close()
-        name
+        if (found) session to recognition else null
     } catch (t: Throwable) {
         null
     }

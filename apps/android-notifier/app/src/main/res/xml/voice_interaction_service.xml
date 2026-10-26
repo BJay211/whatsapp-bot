@@ -2,15 +2,30 @@
 <!--
   Assistant configuration for Android's "Digital assistant app" picker.
 
-  sessionService  - the service Android binds when the assistant is invoked.
-  supportsAssist  - lets the app answer the assist gesture (long-press home).
-  supportsLaunchVoiceAssistFromKeyguard - assistant is offered on the lock screen.
+  Every attribute below is validated by the platform class
+  android.service.voice.VoiceInteractionServiceInfo before the app is offered as
+  an assistant. It requires BOTH services to be named:
 
-  recognitionService is intentionally omitted: the session hands off to
-  AskActivity, which uses the device's normal RecognizerIntent provider, so the
-  system's default speech recogniser is used and no extra service is required.
+    if (mSessionService == null)     -> "No sessionService specified"
+    if (mRecognitionService == null) -> "No recognitionService specified"
+
+  Omitting recognitionService kept the app out of the picker even though a plain
+  PackageManager query for the android.service.voice.VoiceInteractionService
+  action still listed it - that is why in-app checks said "registered" while
+  Settings showed nothing.
+
+  recognitionService points at the device's speech recogniser, the same component
+  Android stores in Settings.Secure "voice_recognition_service". It is only a
+  declaration: JARVIS performs recognition through RecognizerIntent, which always
+  uses the user's current recogniser, so no extra service or permission ships in
+  this app and the user's speech settings are never overridden.
+
+  sessionService                          - bound when the assistant is invoked.
+  supportsAssist                          - answers the assist gesture.
+  supportsLaunchVoiceAssistFromKeyguard   - offered on the lock screen.
 -->
 <voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:sessionService="com.bonjee.notifier.assistant.BonjeeVoiceInteractionSessionService"
+    android:recognitionService="com.google.android.googlequicksearchbox/com.google.android.voicesearch.serviceapi.GoogleRecognitionService"
     android:supportsAssist="true"
     android:supportsLaunchVoiceAssistFromKeyguard="true" />

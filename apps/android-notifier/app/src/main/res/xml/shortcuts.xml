@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_tile_jarvis"
+        android:shortcutId="ask_jarvis"
+        android:shortcutLongLabel="@string/shortcut_ask_long"
+        android:shortcutShortLabel="@string/shortcut_ask_short">
+        <intent
+            android:action="android.intent.action.ASSIST"
+            android:targetClass="com.bonjee.notifier.ui.JarvisHomeActivity"
+            android:targetPackage="com.bonjee.notifier" />
+    </shortcut>
+</shortcuts>

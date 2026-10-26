@@ -54,6 +54,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Long-press the app icon > "Ask JARVIS" (Android 7.1+). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
             <!-- Second route to the assistant. The standard path is the
                  VoiceInteractionService + assistant role, but some launchers,
                  accessibility triggers and OEM gestures dispatch
@@ -127,6 +132,17 @@
             android:name=".ForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name=".ui.AskTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_jarvis"
+            android:label="Ask JARVIS"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- Optional tap assist: presses WhatsApp's call/send button after the
              assistant opens a chat. Off until the user enables it in

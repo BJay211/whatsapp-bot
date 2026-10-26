@@ -52,6 +52,20 @@ It runs inside the existing assistant flow: `AskActivity` offers every sentence 
 engine first, and `NotHandled` falls through to the same `personal-ai-ask` webhook, so
 archive questions behave exactly as before (including offline failures).
 
+## Summoning the assistant
+
+| Route | How | Notes |
+| :-- | :-- | :-- |
+| Assistant role | Settings > Default apps > Digital assistant app > JARVIS | System gesture (corner swipe / home or power long-press) then opens the home card and starts listening |
+| ACTION_ASSIST | Launchers and OEM triggers that skip the session | Handled by `JarvisHomeActivity` directly |
+| Quick Settings tile | "Ask JARVIS" tile in the shade | Same `ACTION_ASSIST` intent, one tap from any screen |
+| App shortcut | Long-press the JARVIS icon > "Ask JARVIS" | Android 7.1+ |
+| Lock screen | Same assistant gesture while locked | The session draws its own card above the keyguard |
+
+Always-on "Hey Google"-style hotword is not available to third-party apps: Android only
+grants hotword capture to a system-signed `HotwordDetectionService`, so JARVIS cannot
+answer to a wake word with the screen off.
+
 ## Context Based Timing
 The `context-summarizer` workflow will run after every ingest, or be triggered internally. It will check the following rules against the newly ingested items: 
 

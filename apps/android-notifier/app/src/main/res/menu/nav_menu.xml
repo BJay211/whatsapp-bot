@@ -35,6 +35,10 @@
                 android:id="@+id/nav_automations"
                 android:icon="@android:drawable/ic_menu_manage"
                 android:title="Automations" />
+            <item
+                android:id="@+id/nav_commands"
+                android:icon="@android:drawable/ic_menu_view"
+                android:title="Device Commands" />
         </menu>
     </item>
 

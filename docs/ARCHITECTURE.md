@@ -29,6 +29,27 @@ graph TD
 | Android Notifier App | Uses `NotificationListenerService` to grab all notifications and POST them to n8n | Sideloaded APK onto your Android device |
 | Next.js Dashboard | View latest brief, deadlines, action items, timeline, and settings | Render Web Service/Static Site | 
 
+## Phone Commands (offline)
+
+The Android app answers a set of spoken/typed sentences on the phone itself before it
+touches the network. `device/DeviceActions.kt` is the engine and
+`device/CommandCatalog.kt` is the single list of supported sentences (also shown on the
+Device Commands screen and spoken for "what can you do").
+
+| Group | Examples | How it works |
+| :-- | :-- | :-- |
+| Apps | `open WhatsApp`, `launch Gmail` | Resolves launcher activities through `<queries>` (MAIN/LAUNCHER), no `QUERY_ALL_PACKAGES` |
+| Calls / texts | `call mum`, `text John saying I am coming` | Contacts lookup + `ACTION_CALL` (falls back to `ACTION_DIAL` without `CALL_PHONE`) |
+| Screen / sound | `brightness 60 percent`, `volume up`, `mute` | `Settings.System` when "Modify system settings" is granted, otherwise window brightness; `AudioManager` for volume/ringer |
+| Quick controls | `torch on`, `next song`, `set alarm for 6:30 am` | Camera2 torch, media key events, `AlarmClock` / calendar insert intents |
+| Search | `youtube ...`, `navigate to ...`, `search for ...` | `ACTION_VIEW` deep links to the installed app or browser |
+| Panels | `wifi`, `bluetooth`, `location` | Opens the system panel and says so; Android forbids silent toggles |
+| Info | `battery`, `time`, `storage`, `read my notifications` | Local APIs + the listener's last 20 notifications |
+
+It runs inside the existing assistant flow: `AskActivity` offers every sentence to the
+engine first, and `NotHandled` falls through to the same `personal-ai-ask` webhook, so
+archive questions behave exactly as before (including offline failures).
+
 ## Context Based Timing
 The `context-summarizer` workflow will run after every ingest, or be triggered internally. It will check the following rules against the newly ingested items: 
 

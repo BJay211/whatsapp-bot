@@ -19,7 +19,7 @@
         android:layout_marginTop="4dp"
         android:layout_marginBottom="12dp"
         android:alpha="0.7"
-        android:text="Questions are answered from your archived WhatsApp messages and tasks." />
+        android:text="Commands run on the phone: open apps, calls, brightness, volume, alarms. Questions are answered from your archive." />
 
     <com.google.android.material.textfield.TextInputLayout
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"

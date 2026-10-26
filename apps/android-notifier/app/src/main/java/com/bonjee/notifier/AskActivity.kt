@@ -1,8 +1,11 @@
 package com.bonjee.notifier
 
 import android.Manifest
+import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
@@ -12,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.bonjee.notifier.databinding.ActivityAskBinding
+import com.bonjee.notifier.device.DeviceActions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,6 +43,47 @@ class AskActivity : AppCompatActivity() {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var pendingSpeech: String? = null
+
+    /** Sentence waiting for a permission/settings round-trip, so it can be retried. */
+    private var pendingQuestion: String? = null
+
+    /** Stops a settings screen from reopening in a loop when nothing was granted. */
+    private var settingsShownOnce = false
+
+    /** Permissions the user has already refused in this session. */
+    private val deniedPermissions = mutableSetOf<String>()
+
+    /**
+     * Runtime permission result for a device command ("call mum" needs contacts).
+     * On success the original sentence is replayed, so the action completes without
+     * the user having to repeat themselves.
+     */
+    private val devicePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        val question = pendingQuestion
+        pendingQuestion = null
+        if (question == null) return@registerForActivityResult
+        val granted = grants.isNotEmpty() && grants.values.all { it }
+        if (!granted) {
+            deniedPermissions.addAll(grants.keys)
+            binding.txtAnswer.text = buildString {
+                append("Permission denied.\n\n")
+                append("Open Settings > Apps > JARVIS > Permissions, allow it, then ask again.")
+            }
+            return@registerForActivityResult
+        }
+        submit(question)
+    }
+
+    /** Returns from a settings screen the command asked for, then retries once. */
+    private val deviceSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        val question = pendingQuestion
+        pendingQuestion = null
+        if (question != null) submit(question)
+    }
 
     private val speechLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -81,6 +126,7 @@ class AskActivity : AppCompatActivity() {
 
         prefs = Prefs.get(this)
         fromAssistant = intent.getBooleanExtra(EXTRA_FROM_ASSISTANT, false)
+        allowOverKeyguard()
 
         // Auto-fill query if passed from home or from the assistant session.
         val passedQuery = intent.getStringExtra(EXTRA_QUERY)
@@ -99,6 +145,24 @@ class AskActivity : AppCompatActivity() {
             } else {
                 startVoiceInput()
             }
+        } else if (!passedQuery.isNullOrEmpty()) {
+            // Sent from the home screen: run it straight away instead of making the
+            // user press Ask a second time.
+            ask()
+        }
+    }
+
+    /**
+     * The assistant can be summoned while the phone is locked, and the sentence
+     * it heard lands here. Without these flags this screen would be created behind
+     * the keyguard, so the command would run but look like nothing happened.
+     */
+    private fun allowOverKeyguard() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager ?: return
+        if (keyguard.isKeyguardLocked) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
         }
     }
 
@@ -151,6 +215,79 @@ class AskActivity : AppCompatActivity() {
             Toast.makeText(this, "Type a question first", Toast.LENGTH_SHORT).show()
             return
         }
+        submit(question)
+    }
+
+    /**
+     * Device-first routing.
+     *
+     * Every sentence is offered to [DeviceActions] before the network. A match runs
+     * on the phone (open an app, change brightness/volume, torch, alarm, call...)
+     * and answers immediately, even offline. Anything unrecognised is declared
+     * NotHandled and continues to the n8n workflow exactly as it always did, so the
+     * archived-question behaviour is unchanged.
+     */
+    private fun submit(question: String) {
+        when (val outcome = DeviceActions.handle(this, question)) {
+            is DeviceActions.Result.Done -> {
+                settingsShownOnce = false
+                present(outcome.message)
+            }
+            is DeviceActions.Result.NeedsPermission ->
+                requestDevicePermission(outcome.permission, outcome.why, question)
+            is DeviceActions.Result.NeedsSettings ->
+                openRequiredSetting(outcome.intent, outcome.why, question)
+            DeviceActions.Result.NotHandled -> askBackend(question)
+        }
+    }
+
+    private fun present(message: String) {
+        binding.btnAsk.isEnabled = true
+        binding.txtAnswer.text = message
+        speak(message)
+    }
+
+    private fun requestDevicePermission(permission: String, why: String, question: String) {
+        binding.txtAnswer.text = why
+        speak(why)
+        if (deniedPermissions.contains(permission)) {
+            binding.txtAnswer.text = buildString {
+                append(why)
+                append("\n\nIt was denied earlier. Allow it in ")
+                append("Settings > Apps > JARVIS > Permissions, then ask again.")
+            }
+            return
+        }
+        pendingQuestion = question
+        try {
+            devicePermissionLauncher.launch(arrayOf(permission))
+        } catch (t: Throwable) {
+            pendingQuestion = null
+            binding.txtAnswer.text = why
+        }
+    }
+
+    private fun openRequiredSetting(intent: Intent, why: String, question: String) {
+        binding.txtAnswer.text = why
+        speak(why)
+        if (settingsShownOnce) {
+            // The user came back from that screen and it is still not granted.
+            settingsShownOnce = false
+            return
+        }
+        settingsShownOnce = true
+        pendingQuestion = question
+        try {
+            deviceSettingsLauncher.launch(intent)
+        } catch (t: Throwable) {
+            settingsShownOnce = false
+            pendingQuestion = null
+            binding.txtAnswer.text = why
+        }
+    }
+
+    private fun askBackend(question: String) {
+        settingsShownOnce = false
         binding.btnAsk.isEnabled = false
         binding.txtAnswer.text = "Thinking..."
 
@@ -171,7 +308,11 @@ class AskActivity : AppCompatActivity() {
                     append("${result.summary}\n\n")
                     append(
                         "Check your internet connection and that the n8n workflow is " +
-                            "active, then try again.",
+                            "active, then try again.\n\n",
+                    )
+                    append(
+                        "Device commands still work without internet - try \"open WhatsApp\", " +
+                            "\"brightness up\", \"torch on\" or \"what can you do\".",
                     )
                 }
             }

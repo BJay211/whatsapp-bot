@@ -76,6 +76,9 @@ class MainActivity : AppCompatActivity() {
         binding.btnSetAssistant.setOnClickListener { requestAssistantRole() }
         binding.btnAssistantDiagnostics.setOnClickListener { showAssistantDiagnostics() }
         binding.btnTestAssistant.setOnClickListener { testVoiceAssistant() }
+        binding.btnDeviceCommands.setOnClickListener {
+            startActivity(Intent(this, com.bonjee.notifier.ui.CommandsActivity::class.java))
+        }
         binding.btnSync.setOnClickListener { syncNow() }
         binding.btnClearQueue.setOnClickListener {
             val n = DeliveryQueue(this).count()

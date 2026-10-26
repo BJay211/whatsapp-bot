@@ -32,6 +32,11 @@ class NotificationListener : NotificationListenerService() {
         if (prefs.blockedPackages.contains(sbn.packageName)) return
 
         val payload = buildPayload(sbn, prefs) ?: return
+        remember(
+            payload.optString("app_name"),
+            payload.optString("title"),
+            payload.optString("content").ifBlank { payload.optString("big_text") },
+        )
 
         val queue = DeliveryQueue(this)
         val url = prefs.notificationUrl()
@@ -138,6 +143,30 @@ class NotificationListener : NotificationListenerService() {
                 "enabled_notification_listeners"
             ) ?: return false
             return enabled.split(":").any { it == packageName || it.startsWith("$packageName/") }
+        }
+
+        /**
+         * Newest-last ring buffer of notifications the listener has seen. It exists
+         * so the assistant can answer "read my notifications" without any extra
+         * permission or query. Only notifications that pass the capture settings
+         * (not blocked, capture enabled) are remembered, and only the last 20.
+         */
+        private val recentLines = java.util.concurrent.CopyOnWriteArrayList<String>()
+
+        fun recent(limit: Int = 5): List<String> =
+            recentLines.toList().takeLast(limit.coerceAtLeast(1))
+
+        fun remember(app: String, title: String, text: String) {
+            val line = buildString {
+                append(app.ifBlank { "App" })
+                if (title.isNotBlank()) append(": ").append(title)
+                if (text.isNotBlank()) append(" - ").append(text)
+            }.trim()
+            if (line.length <= 4) return
+            recentLines.add(line)
+            while (recentLines.size > 20) {
+                recentLines.removeAt(0)
+            }
         }
     }
 }

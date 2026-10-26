@@ -38,6 +38,18 @@ object CommandCatalog {
             ),
         ),
         Section(
+            "TWO ACTIONS AT ONCE",
+            listOf(
+                "open WhatsApp then message John",
+                "open WhatsApp and message John saying I am coming",
+                "open WhatsApp then call Ada",
+                "open WhatsApp and search for John then open the chat",
+                "open WhatsApp then message John then open the chat",
+                "open contacts then call Ada",
+                "torch on then brightness 60 percent",
+            ),
+        ),
+        Section(
             "WHATSAPP RULES & MESSAGES",
             listOf(
                 "message rules",
@@ -130,6 +142,7 @@ object CommandCatalog {
         appendLine("I can run this phone myself, and still answer from your n8n archive.")
         appendLine()
         appendLine("Apps - \"open WhatsApp\", \"launch Gmail\", \"open calculator\".")
+        appendLine("Chains - \"open WhatsApp then message John\", \"open WhatsApp and search for Ada then open the chat\".")
         appendLine("Calls - \"call mum\", \"text John saying I'm coming\", \"find Ada in contacts\".")
         appendLine("WhatsApp - \"call John on whatsapp\", \"whatsapp Ada saying hello\".")
         appendLine("Rules - \"message rules\", \"important contacts\", \"open messages\".")
@@ -163,6 +176,10 @@ object CommandCatalog {
         appendLine("    with the message typed.")
         appendLine("  • SMS is sent directly once the SMS permission is granted;")
         appendLine("    without it the message is written and left for you to send.")
+        appendLine("  • Chained commands run left to right: \"open WhatsApp then message")
+        appendLine("    John\", \"open WhatsApp and search for John then open the chat\".")
+        appendLine("    Up to 5 steps. If a later step needs a permission, the steps")
+        appendLine("    that already ran are not repeated automatically.")
         append("  • Anything not listed here is sent to your n8n workflow as usual.")
     }
 }

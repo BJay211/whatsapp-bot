@@ -377,7 +377,7 @@ Called by **Message Settings → Register this device**. Authenticated by the sa
 {
   "device_name": "Xiaomi 23106RN0DA",
   "platform": "android",
-  "app_version": "3.1",
+  "app_version": "3.2",
   "push_provider": "none",
   "push_token": "",
   "notification_capture": true

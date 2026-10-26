@@ -3,88 +3,132 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/bg_primary"
     android:orientation="vertical"
-    android:background="@color/bg_primary">
+    android:padding="16dp">
 
-    <LinearLayout
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:letterSpacing="0.15"
+        android:text="MEMORY CORE"
+        android:textColor="@color/cyan"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp"
-        android:background="@color/bg_card">
+        android:layout_marginTop="3dp"
+        android:alpha="0.8"
+        android:text="Graph of what this phone knows: contacts, captured messages and your notes. The cloud graph is searched only when you ask."
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="MEMORY CORE"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:textColor="@color/cyan"
-            android:letterSpacing="0.15" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="LONG-TERM CONTEXT • PREFERENCES • FACTS"
-            android:textSize="9sp"
-            android:textColor="@color/orange"
-            android:letterSpacing="0.2"
-            android:layout_marginTop="4dp" />
-    </LinearLayout>
-
-    <ScrollView
+    <TextView
+        android:id="@+id/txtMemoryStatus"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="monospace"
+        android:textColor="@color/text_tertiary"
+        android:textSize="10sp" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        app:cardBackgroundColor="@color/bg_card"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="0dp"
+        app:strokeColor="@color/border_cyan"
+        app:strokeWidth="1dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="8dp">
 
-            <com.google.android.material.card.MaterialCardView
+            <com.bonjee.notifier.ui.MemoryGraphView
+                android:id="@+id/memoryGraph"
+                android:layout_width="match_parent"
+                android:layout_height="220dp" />
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="0dp"
-                app:cardBackgroundColor="@color/bg_card"
-                app:strokeColor="@color/border_cyan"
-                app:strokeWidth="1dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="RECENT MEMORIES"
-                        android:textSize="10sp"
-                        android:textColor="@color/cyan"
-                        android:letterSpacing="0.2"
-                        android:layout_marginBottom="12dp" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="No memories stored yet. Start conversing with JARVIS to build your memory core."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        android:padding="12dp" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAddMemory"
-                style="@style/JarvisButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="ADD MEMORY FRAGMENT"
-                android:textColor="@color/black"
-                app:backgroundTint="@color/cyan" />
+                android:gravity="center"
+                android:text="ORANGE important  •  GREEN auto-reply  •  PURPLE message  •  CYAN note"
+                android:textColor="@color/text_dim"
+                android:textSize="8sp" />
         </LinearLayout>
-    </ScrollView>
+    </com.google.android.material.card.MaterialCardView>
+
+    <EditText
+        android:id="@+id/editMemorySearch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@color/bg_card_alt"
+        android:hint="Filter notes, contacts and messages"
+        android:inputType="text"
+        android:maxLines="1"
+        android:padding="10dp"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_dim"
+        android:textSize="13sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddMemory"
+            style="@style/JarvisButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ADD NOTE"
+            android:textColor="@color/black"
+            app:backgroundTint="@color/cyan" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnMemoryCloud"
+            style="@style/JarvisButton.Outlined"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="SEARCH N8N" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnMemoryAsk"
+            style="@style/JarvisButton.Outlined"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="ASK" />
+    </LinearLayout>
+
+    <ListView
+        android:id="@+id/listMemory"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="6dp"
+        android:layout_weight="1"
+        android:divider="@color/border"
+        android:dividerHeight="1dp" />
+
+    <TextView
+        android:id="@+id/txtMemoryFooter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:alpha="0.75"
+        android:textColor="@color/text_dim"
+        android:textSize="9sp" />
 </LinearLayout>

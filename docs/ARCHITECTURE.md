@@ -52,6 +52,47 @@ It runs inside the existing assistant flow: `AskActivity` offers every sentence 
 engine first, and `NotHandled` falls through to the same `personal-ai-ask` webhook, so
 archive questions behave exactly as before (including offline failures).
 
+### Chained commands
+
+`device/CommandChain.kt` splits one sentence on `then`, `and then`, `after that`,
+`afterwards`, `after which`, a semicolon or a newline, plus the spoken shape
+`open <app> and <rest>`. Plain "and" inside a message body is never a separator, and
+"next" only splits when an action follows it (so `next song` stays one command).
+
+Up to five steps run left to right through the same single-action router. Context is
+carried forward: after `open WhatsApp`, a bare `message John` becomes a WhatsApp chat,
+`call him` becomes a WhatsApp call, `search for John` becomes WhatsApp search, and
+`open the chat` reuses the last contact.
+
+Examples:
+
+| Sentence | Steps |
+| :-- | :-- |
+| `open WhatsApp then message John` | open app, WhatsApp chat |
+| `open WhatsApp and message John saying I am coming` | open app, WhatsApp message |
+| `open WhatsApp and search for John then open the chat` | open app, open chat, reuse chat |
+| `open contacts then call Ada` | contacts screen, phone call |
+
+Safety: if a later step needs a permission or a settings screen, the steps that already
+ran are reported and are **not** replayed automatically, so a chained send cannot happen
+twice. When nothing has run yet, the whole sentence is replayed after the grant. If the
+first step is not a device action, the original sentence goes to the workflow unchanged.
+
+## Native modules (no dashboard required)
+
+| Drawer item | Screen | Data source |
+| :-- | :-- | :-- |
+| Memory Core | `MemoryActivity` + `MemoryGraphView` | Local contact rules, captured messages and notes; graph drawn natively. `memory.search` is an explicit button with the real HTTP answer |
+| Inbox | `MessageInboxActivity` | `MessageStore` written by the notification listener |
+| Tasks | `TasksActivity` + `LocalTaskStore` | SharedPreferences task list; optional `task.create` sync reports the real result |
+| Calendar | `CalendarActivity` | Device `CalendarContract.Instances`, upcoming 60 days; new events open the system insert screen |
+| Automations | `AutomationsActivity` | Real `Prefs` switches for capture, announcements, quiet hours, privacy, auto-reply and tap assist, plus honest permission/endpoint status |
+| Devices & n8n | `MessageSettingsActivity` | Endpoint, device registration and self-checks |
+| Message Rules | `ContactRulesActivity` | Important / Auto-Reply / Other with server authorisation |
+
+`WebModuleActivity` still exists but no drawer route uses it: the Next.js dashboard is
+not deployed, so pointing the menu at it only produced a dead WebView.
+
 ## Summoning the assistant
 
 | Route | How | Notes |

@@ -47,6 +47,12 @@ class AskActivity : AppCompatActivity() {
     /** Sentence waiting for a permission/settings round-trip, so it can be retried. */
     private var pendingQuestion: String? = null
 
+    /**
+     * Whether the whole sentence may be replayed after the round-trip. False
+     * when an earlier step of a chain already ran: replaying could send twice.
+     */
+    private var pendingRetry = true
+
     /** Stops a settings screen from reopening in a loop when nothing was granted. */
     private var settingsShownOnce = false
 
@@ -62,8 +68,16 @@ class AskActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { grants ->
         val question = pendingQuestion
+        val retry = pendingRetry
         pendingQuestion = null
-        if (question == null) return@registerForActivityResult
+        pendingRetry = true
+        if (question == null) {
+            if (grants.isNotEmpty() && grants.values.all { it }) {
+                binding.txtAnswer.text =
+                    "Permission granted. Say the command again and I will continue from the start."
+            }
+            return@registerForActivityResult
+        }
         val granted = grants.isNotEmpty() && grants.values.all { it }
         if (!granted) {
             deniedPermissions.addAll(grants.keys)
@@ -73,7 +87,13 @@ class AskActivity : AppCompatActivity() {
             }
             return@registerForActivityResult
         }
-        submit(question)
+        if (retry) {
+            submit(question)
+        } else {
+            binding.txtAnswer.text =
+                "Permission granted. Earlier steps already ran, so say the command again - " +
+                    "I won't repeat them by myself."
+        }
     }
 
     /** Returns from a settings screen the command asked for, then retries once. */
@@ -81,8 +101,16 @@ class AskActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult(),
     ) {
         val question = pendingQuestion
+        val retry = pendingRetry
         pendingQuestion = null
-        if (question != null) submit(question)
+        pendingRetry = true
+        if (question != null && retry) {
+            submit(question)
+        } else {
+            binding.txtAnswer.text =
+                "Back from settings. If you allowed it, say the command again; " +
+                    "earlier steps will not be repeated."
+        }
     }
 
     private val speechLauncher = registerForActivityResult(
@@ -244,9 +272,15 @@ class AskActivity : AppCompatActivity() {
                 present(outcome.message)
             }
             is DeviceActions.Result.NeedsPermission ->
-                requestDevicePermission(outcome.permission, outcome.why, question)
+                requestDevicePermission(
+                    outcome.permission, outcome.why, question,
+                    retryable = outcome.retryable, progress = outcome.progress,
+                )
             is DeviceActions.Result.NeedsSettings ->
-                openRequiredSetting(outcome.intent, outcome.why, question)
+                openRequiredSetting(
+                    outcome.intent, outcome.why, question,
+                    retryable = outcome.retryable, progress = outcome.progress,
+                )
             is DeviceActions.Result.Open -> {
                 present(outcome.message)
                 try {
@@ -254,6 +288,10 @@ class AskActivity : AppCompatActivity() {
                 } catch (t: Throwable) {
                     // Screen missing (should not happen) - the message still explains it.
                 }
+            }
+            is DeviceActions.Result.NeedInfo -> {
+                settingsShownOnce = false
+                present(outcome.message)
             }
             DeviceActions.Result.NotHandled -> askBackend(question)
         }
@@ -265,48 +303,66 @@ class AskActivity : AppCompatActivity() {
         speak(message)
     }
 
-    private fun requestDevicePermission(permission: String, why: String, question: String) {
-        binding.txtAnswer.text = why
+    private fun requestDevicePermission(
+        permission: String,
+        why: String,
+        question: String,
+        retryable: Boolean,
+        progress: String,
+    ) {
+        val shown = if (progress.isBlank()) why else "$progress\n\n$why"
+        binding.txtAnswer.text = shown
         speak(why)
         if (deniedPermissions.contains(permission)) {
             binding.txtAnswer.text = buildString {
-                append(why)
+                append(shown)
                 append("\n\nIt was denied earlier. Allow it in ")
                 append("Settings > Apps > JARVIS > Permissions, then ask again.")
             }
             return
         }
-        pendingQuestion = question
+        pendingQuestion = if (retryable) question else null
+        pendingRetry = retryable
         try {
             devicePermissionLauncher.launch(arrayOf(permission))
         } catch (t: Throwable) {
             pendingQuestion = null
-            binding.txtAnswer.text = why
+            pendingRetry = true
+            binding.txtAnswer.text = shown
         }
     }
 
-    private fun openRequiredSetting(intent: Intent, why: String, question: String) {
-        binding.txtAnswer.text = why
+    private fun openRequiredSetting(
+        intent: Intent,
+        why: String,
+        question: String,
+        retryable: Boolean,
+        progress: String,
+    ) {
+        val shown = if (progress.isBlank()) why else "$progress\n\n$why"
+        binding.txtAnswer.text = shown
         speak(why)
         if (settingsShownOnce) {
             // The user came back from that screen and it is still not granted.
             // Say so instead of leaving a stale "opening..." message.
             settingsShownOnce = false
             binding.txtAnswer.text = buildString {
-                append(why)
+                append(shown)
                 append("\n\nStill not allowed. Say \"set up access\" for a guided list, ")
                 append("or open it yourself: Settings > Apps > JARVIS.")
             }
             return
         }
         settingsShownOnce = true
-        pendingQuestion = question
+        pendingQuestion = if (retryable) question else null
+        pendingRetry = retryable
         try {
             deviceSettingsLauncher.launch(intent)
         } catch (t: Throwable) {
             settingsShownOnce = false
             pendingQuestion = null
-            binding.txtAnswer.text = why
+            pendingRetry = true
+            binding.txtAnswer.text = shown
         }
     }
 

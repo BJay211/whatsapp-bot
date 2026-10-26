@@ -3,52 +3,59 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/bg_primary"
     android:orientation="vertical"
-    android:background="@color/bg_primary">
+    android:padding="16dp">
 
-    <LinearLayout
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:letterSpacing="0.15"
+        android:text="ACTIONS &amp; INTEGRATIONS"
+        android:textColor="@color/cyan"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp"
-        android:background="@color/bg_card">
+        android:layout_marginTop="3dp"
+        android:alpha="0.8"
+        android:text="Every module is a native screen now. Nothing here depends on the undeployed web dashboard."
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="ACTIONS &amp; INTEGRATIONS"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:textColor="@color/green"
-            android:letterSpacing="0.15" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="WORKFLOWS • AUTOMATIONS • BRIDGE"
-            android:textSize="9sp"
-            android:textColor="@color/cyan"
-            android:letterSpacing="0.2"
-            android:layout_marginTop="4dp" />
-    </LinearLayout>
+    <TextView
+        android:id="@+id/txtActionsStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="monospace"
+        android:textColor="@color/text_tertiary"
+        android:textSize="10sp" />
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/JarvisSection"
+                android:layout_marginTop="0dp"
+                android:text="OPERATING MODULES" />
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                app:cardBackgroundColor="@color/bg_card"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="@color/bg_card"
                 app:strokeColor="@color/border_cyan"
                 app:strokeWidth="1dp">
 
@@ -56,112 +63,120 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="N8N AUTOMATION BRIDGE"
-                        android:textSize="10sp"
-                        android:textColor="@color/green"
-                        android:letterSpacing="0.2"
-                        android:layout_marginBottom="12dp" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Connect JARVIS to your n8n workflows for WhatsApp, external services, and multi-step automations."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        android:layout_marginBottom="12dp" />
+                    android:padding="12dp">
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnConfigureN8n"
+                        android:id="@+id/btnActionMemory"
                         style="@style/JarvisButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="CONFIGURE N8N CONNECTION"
+                        android:text="MEMORY CORE"
                         android:textColor="@color/black"
-                        app:backgroundTint="@color/green" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="0dp"
-                app:cardBackgroundColor="@color/bg_card"
-                app:strokeColor="@color/border_orange"
-                app:strokeWidth="1dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="WHATSAPP INTEGRATION"
-                        android:textSize="10sp"
-                        android:textColor="@color/orange"
-                        android:letterSpacing="0.2"
-                        android:layout_marginBottom="12dp" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Process messages through Evolution API and n8n."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        android:layout_marginBottom="12dp" />
+                        app:backgroundTint="@color/cyan" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnWhatsApp"
+                        android:id="@+id/btnActionAutomations"
                         style="@style/JarvisButton.Outlined"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="WHATSAPP STATUS"
-                        android:textColor="@color/orange"
-                        app:strokeColor="@color/border_orange" />
+                        android:layout_marginTop="6dp"
+                        android:text="AUTOMATIONS" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionTasks"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="TASKS" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionCalendar"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="CALENDAR" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionInbox"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="WHATSAPP MESSAGES" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                style="@style/JarvisSection"
+                android:text="RULES AND ACCESS" />
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                app:cardBackgroundColor="@color/bg_card"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="@color/bg_card"
-                app:strokeColor="@color/border"
+                app:strokeColor="@color/border_cyan"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="16dp">
+                    android:padding="12dp">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="PENDING TASKS"
-                        android:textSize="10sp"
-                        android:textColor="@color/cyan"
-                        android:letterSpacing="0.2"
-                        android:layout_marginBottom="12dp" />
-
-                    <TextView
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionRules"
+                        style="@style/JarvisButton.Outlined"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="No pending actions requiring approval."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp" />
+                        android:text="MESSAGE RULES" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionMessageSettings"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="MESSAGE SETTINGS" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionCommands"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="DEVICE COMMANDS" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionAccess"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="SET UP ACCESS" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionAsk"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="ASK JARVIS" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:id="@+id/txtActionsFooter"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:alpha="0.75"
+                android:paddingBottom="12dp"
+                android:textColor="@color/text_dim"
+                android:textSize="9sp" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

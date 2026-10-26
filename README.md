@@ -114,8 +114,9 @@ Copy it to your phone, install it, then:
 1. Base URL: `https://bonjee-n8n.onrender.com`
 2. Notification path: `/webhook/notifications-ingest`
 3. Ask path: `/webhook/personal-ai-ask`
-4. Dashboard URL: `https://bonjee-dashboard.onrender.com` (the side menu opens
-   Inbox, Tasks, Calendar, Automations, Memory, Devices and Settings from there)
+4. Dashboard URL: `https://bonjee-dashboard.onrender.com` (only used if that service is
+   deployed; the side-menu modules are native now - Memory Core, Inbox, Tasks, Calendar,
+   Automations, Message Rules and Devices & n8n all work without the dashboard)
 5. **Save settings -> Test connection -> Grant notification access -> Start capture service**
 
 The home screen is the glowing energy core. Tap the core to speak (a waveform

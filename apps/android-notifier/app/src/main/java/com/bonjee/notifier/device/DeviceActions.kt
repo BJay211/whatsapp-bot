@@ -47,14 +47,33 @@ object DeviceActions {
         /** The action ran (or the question was answered) - show [message]. */
         data class Done(val message: String) : Result()
 
-        /** Android needs this runtime permission before the action can run. */
-        data class NeedsPermission(val permission: String, val why: String) : Result()
+        /**
+         * Android needs this runtime permission before the action can run.
+         *
+         * [retryable] is false for a later step of a chain that already ran
+         * something: replaying the whole chain could send twice. [progress]
+         * lists what did run, so the user knows what not to repeat.
+         */
+        data class NeedsPermission(
+            val permission: String,
+            val why: String,
+            val retryable: Boolean = true,
+            val progress: String = "",
+        ) : Result()
 
         /** Android needs the user to confirm something on a settings screen. */
-        data class NeedsSettings(val intent: Intent, val why: String) : Result()
+        data class NeedsSettings(
+            val intent: Intent,
+            val why: String,
+            val retryable: Boolean = true,
+            val progress: String = "",
+        ) : Result()
 
         /** Opens one of our own screens; the message explains what it is for. */
         data class Open(val intent: Intent, val message: String) : Result()
+
+        /** One more detail is needed; the chain stops rather than guessing. */
+        data class NeedInfo(val message: String) : Result()
 
         /** Not a device command - send it to n8n as usual. */
         object NotHandled : Result()
@@ -62,9 +81,23 @@ object DeviceActions {
 
     // ------------------------------------------------------------------ entry
 
+    /**
+     * Chained commands: "open WhatsApp then message John", "open WhatsApp and
+     * search for John then open the chat". [CommandChain] splits the sentence;
+     * each step goes through the same single-action router, with the previous
+     * step's app/contact carried forward.
+     */
     fun handle(activity: Activity, raw: String): Result {
         val text = raw.trim()
         if (text.length < 2) return Result.NotHandled
+
+        val plan = CommandChain.plan(text)
+        if (plan.steps.size > 1) return runChain(activity, plan)
+
+        return runSingle(activity, plan.steps.firstOrNull() ?: text)
+    }
+
+    private fun runSingle(activity: Activity, text: String): Result {
         val q = normalise(text)
 
         return help(q)
@@ -76,15 +109,103 @@ object DeviceActions {
             ?: volume(activity, text, q)
             ?: mediaControl(activity, q)
             ?: torch(activity, q)
+            ?: messageScreens(activity, q)
+            ?: whatsappChat(activity, text, q)
             ?: callOrMessage(activity, text, q)
             ?: systemPanel(activity, q)
             ?: deviceInfo(activity, text, q)
             ?: notifications(activity, q)
-            ?: messageScreens(activity, q)
             ?: contactSearch(activity, text, q)
             ?: searchAndNavigate(activity, text, q)
             ?: openApp(activity, text, q)
             ?: Result.NotHandled
+    }
+
+    // ----------------------------------------------------------------- chains
+
+    private fun runChain(activity: Activity, plan: CommandChain.Plan): Result {
+        val reports = ArrayList<String>(plan.steps.size)
+        val total = plan.steps.size
+        var context = CommandChain.Context()
+
+        fun report(): String {
+            val header = if (reports.size >= total) {
+                "Done - all $total steps:"
+            } else {
+                "Ran ${reports.size} of $total steps:"
+            }
+            val body = reports.joinToString("\n")
+            return if (body.isBlank()) header else "$header\n$body"
+        }
+
+        for (index in plan.steps.indices) {
+            val rawStep = plan.steps[index]
+            val step = CommandChain.rewrite(rawStep, context)
+            val label = "${index + 1}. "
+            val outcome = try {
+                runSingle(activity, step)
+            } catch (t: Throwable) {
+                Result.Done("I couldn't run that (${t.javaClass.simpleName}).")
+            }
+
+            when (outcome) {
+                is Result.Done -> reports.add(label + outcome.message)
+
+                is Result.NeedInfo -> {
+                    reports.add(label + outcome.message)
+                    return Result.Done(report())
+                }
+
+                is Result.Open -> {
+                    reports.add(label + outcome.message)
+                    // Our own screen: if it is the last step, open it. Mid-chain
+                    // we stop, because the remaining steps belong elsewhere.
+                    return if (index == total - 1) {
+                        Result.Open(outcome.intent, report())
+                    } else {
+                        Result.Done(report() + "\n\nI stopped there so the next step couldn't open the wrong screen.")
+                    }
+                }
+
+                is Result.NeedsPermission -> {
+                    val progress = if (reports.isEmpty()) "" else report()
+                    return Result.NeedsPermission(
+                        permission = outcome.permission,
+                        why = outcome.why,
+                        retryable = reports.isEmpty(),
+                        progress = progress,
+                    )
+                }
+
+                is Result.NeedsSettings -> {
+                    val progress = if (reports.isEmpty()) "" else report()
+                    return Result.NeedsSettings(
+                        intent = outcome.intent,
+                        why = outcome.why,
+                        retryable = reports.isEmpty(),
+                        progress = progress,
+                    )
+                }
+
+                Result.NotHandled -> {
+                    if (reports.isEmpty()) {
+                        // Nothing ran: let the whole sentence go to the workflow
+                        // as a question, instead of answering half of it locally.
+                        return Result.NotHandled
+                    }
+                    reports.add(label + "I didn't understand \"$rawStep\".")
+                    return Result.Done(report())
+                }
+            }
+            context = CommandChain.nextContext(step, context)
+        }
+
+        val message = report() + if (plan.truncated) {
+            "\n\nI can run up to ${CommandChain.MAX_STEPS} steps at once; the rest was left out."
+        } else {
+            ""
+        }
+        return Result.Done(message)
     }
 
     // ------------------------------------------------------------------ help
@@ -731,6 +852,79 @@ object DeviceActions {
         if (mailMatch != null) return sendEmail(activity, mailMatch.groupValues[1])
 
         return null
+    }
+
+    /**
+     * WhatsApp search/open-chat steps used by chained commands and by direct
+     * phrases such as "search for John on WhatsApp".
+     *
+     * WhatsApp has no public intent for its in-app search, so a resolvable
+     * contact is opened straight in their chat with a `wa.me` link. When the
+     * number is unknown the app is opened instead and the user is told to
+     * search - the assistant never pretends it typed into WhatsApp.
+     */
+    private fun whatsappChat(activity: Activity, text: String, q: String): Result? {
+        val lower = text.lowercase(Locale.getDefault())
+        val patterns = listOf(
+            Regex("""^(?:search|find|look\s*up)\s+(?:for\s+)?(.+?)\s+(?:on|in|via)\s+whatsapp$""") to
+                "Who should I look for on WhatsApp?",
+            Regex("""^(?:search|find|look\s*up)\s+whatsapp\s+(?:for\s+)?(.+)$""") to
+                "Who should I look for on WhatsApp?",
+            Regex("""^(?:open|start|show)\s+(?:the\s+)?(?:whatsapp\s+)?(?:chat|conversation)\s+(?:with|for)\s+(.+)$""") to
+                "Who should I open a WhatsApp chat with?",
+            Regex("""^(?:open|start|show)\s+(?:the\s+)?(?:whatsapp\s+)?(?:chat|conversation)$""") to
+                "Who should I open a WhatsApp chat with?",
+            Regex("""^(?:message|text)\s+(.+?)\s+(?:on|via)\s+whatsapp$""") to
+                "Who should I message on WhatsApp?",
+        )
+        for ((pattern, missing) in patterns) {
+            val match = pattern.find(lower) ?: continue
+            val target = match.groupValues.getOrNull(1).orEmpty().trim()
+            if (target.isBlank() || isGenericTarget(target)) return Result.NeedInfo(missing)
+            return openWhatsAppChat(activity, target)
+        }
+        return null
+    }
+
+    private fun openWhatsAppChat(activity: Activity, target: String): Result {
+        if (target.isBlank()) return Result.NeedInfo("Who should I open a WhatsApp chat with?")
+        val digits = digitsOf(target)
+        val number = if (digits.length >= 3) {
+            digits
+        } else {
+            if (!has(activity, Manifest.permission.READ_CONTACTS)) {
+                return Result.NeedsPermission(
+                    Manifest.permission.READ_CONTACTS,
+                    "I need contacts access to find \"$target\" on WhatsApp.",
+                )
+            }
+            contactNumber(activity, target)
+        }
+        if (number == null) {
+            val app = resolveApp(activity, "whatsapp")
+            return if (app != null && launch(activity, app)) {
+                Result.Done(
+                    "I don't have \"$target\" in your contacts, so I opened WhatsApp for you to search.",
+                )
+            } else {
+                Result.Done("I don't have \"$target\" in your contacts and WhatsApp isn't installed.")
+            }
+        }
+        val url = "https://wa.me/" + number.filter { it.isDigit() }
+        return if (tryStart(activity, Intent(Intent.ACTION_VIEW, Uri.parse(url)))) {
+            Result.Done("Opening the WhatsApp chat with $target.")
+        } else {
+            Result.Done("No app handled that WhatsApp link.")
+        }
+    }
+
+    private fun isGenericTarget(name: String): Boolean {
+        val lower = name.lowercase(Locale.getDefault()).trim().trim('"', '\'')
+        val bare = lower.removePrefix("a ").removePrefix("the ").removePrefix("my ").trim()
+        return bare.isEmpty() || bare in setOf(
+            "contact", "contacts", "someone", "somebody", "anyone", "chat", "conversation",
+            "him", "her", "them", "it", "me", "you", "whatsapp",
+        )
     }
 
     /**

@@ -200,16 +200,33 @@ class ContactsActivity : AppCompatActivity() {
                 toast(outcome.message)
             }
             is DeviceActions.Result.NeedsPermission -> {
-                pendingAction = { run(command) }
+                binding.txtHint.text = if (outcome.progress.isBlank()) {
+                    outcome.why
+                } else {
+                    outcome.progress + "\n\n" + outcome.why
+                }
+                pendingAction = if (outcome.retryable) {
+                    { run(command) }
+                } else {
+                    null
+                }
                 permissionLauncher.launch(outcome.permission)
             }
             is DeviceActions.Result.NeedsSettings -> {
-                binding.txtHint.text = outcome.why
+                binding.txtHint.text = if (outcome.progress.isBlank()) {
+                    outcome.why
+                } else {
+                    outcome.progress + "\n\n" + outcome.why
+                }
                 startActivity(outcome.intent)
             }
             is DeviceActions.Result.Open -> {
                 binding.txtHint.text = outcome.message
                 startActivity(outcome.intent)
+            }
+            is DeviceActions.Result.NeedInfo -> {
+                binding.txtHint.text = outcome.message
+                toast(outcome.message)
             }
             DeviceActions.Result.NotHandled -> toast("I didn't understand that command")
         }

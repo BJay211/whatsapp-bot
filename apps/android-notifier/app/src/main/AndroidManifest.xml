@@ -78,7 +78,25 @@
         <activity
             android:name=".ui.MemoryActivity"
             android:exported="false"
-            android:label="Memory Core" />
+            android:label="Memory Core"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.AutomationsActivity"
+            android:exported="false"
+            android:label="Automations"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.TasksActivity"
+            android:exported="false"
+            android:label="Tasks"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.CalendarActivity"
+            android:exported="false"
+            android:label="Calendar" />
 
         <activity
             android:name=".ui.PermissionsActivity"

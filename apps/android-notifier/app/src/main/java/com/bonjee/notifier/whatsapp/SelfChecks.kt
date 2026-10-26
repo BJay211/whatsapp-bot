@@ -1,5 +1,7 @@
 package com.bonjee.notifier.whatsapp
 
+import com.bonjee.notifier.device.CommandChain
+
 /**
  * Executable specification for the WhatsApp rules.
  *
@@ -24,6 +26,7 @@ object SelfChecks {
         addAll(states())
         addAll(audio())
         addAll(conversation())
+        addAll(chains())
     }
 
     /** Runs [run] and prints a report; returns true when everything passed. */
@@ -296,6 +299,71 @@ object SelfChecks {
         add("counts cover every state", MessageBox().counts().keys == MessageState.entries.toSet())
         add("remove drops one message", MessageBox().upsert(a).remove("a").items.isEmpty())
         add("blank sender cannot match a conversation", MessageBox().upsert(a).forSender("", NG).isEmpty())
+        return out
+    }
+
+    // ------------------------------------------------------------ command chains
+
+    private fun chains(): List<Check> {
+        val out = ArrayList<Check>()
+        fun add(name: String, ok: Boolean, detail: String = "") = out.add(Check(name, ok, detail))
+
+        val twoThen = CommandChain.split("open whatsapp then message John")
+        add("then splits two steps", twoThen == listOf("open whatsapp", "message John"), twoThen.toString())
+
+        val twoAnd = CommandChain.split("open whatsapp and message John")
+        add("open-app-and splits two steps", twoAnd == listOf("open whatsapp", "message John"), twoAnd.toString())
+
+        val three = CommandChain.split("open whatsapp and search for John on whatsapp then open the chat")
+        add(
+            "search then open chat is three steps",
+            three == listOf("open whatsapp", "search for John on whatsapp", "open the chat"),
+            three.toString(),
+        )
+
+        add("plain and inside a message is not a chain", CommandChain.split("message John saying I will come and see you").size == 1)
+        add("then inside a message body is not a chain", CommandChain.split("message John saying I will call you then come home").size == 1)
+        add("next song is one command", CommandChain.split("play next song").size == 1)
+        add("bare next with an action splits", CommandChain.split("open whatsapp next message John").size == 2)
+        add("no separators means one step", CommandChain.split("torch on").size == 1)
+        add("empty input has no steps", CommandChain.plan("   ").steps.isEmpty())
+
+        val long = CommandChain.plan((1..7).joinToString(" then ") { "torch ${if (it % 2 == 0) "off" else "on"}" })
+        add("long chains are capped", long.steps.size == CommandChain.MAX_STEPS && long.truncated)
+
+        val wa = CommandChain.Context(app = "whatsapp", target = "John")
+        add("message after whatsapp routes to whatsapp", CommandChain.rewrite("message John", wa) == "whatsapp John")
+        add("text after whatsapp routes to whatsapp", CommandChain.rewrite("text him", wa) == "whatsapp John")
+        add("call pronoun after whatsapp becomes a whatsapp call", CommandChain.rewrite("call her", wa) == "whatsapp call John")
+        add("open the chat reuses the contact", CommandChain.rewrite("open the chat", wa) == "whatsapp John")
+        add("search after whatsapp stays on whatsapp", CommandChain.rewrite("search for John", wa) == "search John on whatsapp")
+        add(
+            "message body survives pronoun replacement",
+            CommandChain.rewrite("message him saying I will call him", wa) == "whatsapp John saying I will call him",
+            CommandChain.rewrite("message him saying I will call him", wa),
+        )
+        add("no context leaves message alone", CommandChain.rewrite("message John", CommandChain.Context()) == "message John")
+
+        add("target comes from a whatsapp message", CommandChain.targetOf("whatsapp John saying hi") == "John")
+        add("target comes from an sms", CommandChain.targetOf("message Ada saying hello") == "Ada")
+        add("target comes from a whatsapp search", CommandChain.targetOf("search for Ada on whatsapp") == "Ada")
+        add("open app has no person target", CommandChain.targetOf("open whatsapp").isEmpty())
+        add("generic contact is not a person", CommandChain.targetOf("search for a contact on whatsapp").isEmpty())
+        add("open whatsapp is recognised", CommandChain.appOf("open whatsapp") == "whatsapp")
+        add("open the chat is not an app", CommandChain.appOf("open the chat").isEmpty())
+
+        var context = CommandChain.nextContext("open whatsapp", CommandChain.Context())
+        add("context remembers the app", context.app == "whatsapp")
+        context = CommandChain.nextContext("search for John on whatsapp", context)
+        add("context remembers the contact", context.app == "whatsapp" && context.target == "John")
+        val chat = CommandChain.rewrite("open the chat", context)
+        add("context completes the third step", chat == "whatsapp John", chat)
+
+        add("please and full stops are cleaned", CommandChain.clean("please open whatsapp.") == "open whatsapp")
+        add(
+            "message punctuation is preserved",
+            CommandChain.clean("message John saying see you at 5.") == "message John saying see you at 5.",
+        )
         return out
     }
 }

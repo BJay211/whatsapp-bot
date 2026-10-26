@@ -220,22 +220,22 @@ class JarvisHomeActivity : AppCompatActivity() {
                     startActivity(Intent(this, AskActivity::class.java))
                 }
                 R.id.nav_memory -> {
-                    openWebModule("/memory", "MEMORY CORE")
+                    startActivity(Intent(this, MemoryActivity::class.java))
                 }
                 R.id.nav_inbox -> {
-                    openWebModule("/inbox", "INBOX")
+                    startActivity(Intent(this, MessageInboxActivity::class.java))
                 }
                 R.id.nav_tasks -> {
-                    openWebModule("/tasks", "TASKS")
+                    startActivity(Intent(this, TasksActivity::class.java))
                 }
                 R.id.nav_calendar -> {
-                    openWebModule("/calendar", "CALENDAR")
+                    startActivity(Intent(this, CalendarActivity::class.java))
                 }
                 R.id.nav_automations -> {
-                    openWebModule("/automations", "AUTOMATIONS")
+                    startActivity(Intent(this, AutomationsActivity::class.java))
                 }
                 R.id.nav_devices -> {
-                    openWebModule("/devices", "DEVICES & n8n")
+                    startActivity(Intent(this, MessageSettingsActivity::class.java))
                 }
                 R.id.nav_app_settings -> {
                     startActivity(Intent(this, com.bonjee.notifier.MainActivity::class.java))
@@ -280,7 +280,7 @@ class JarvisHomeActivity : AppCompatActivity() {
                     startActivity(Intent(this, MessageSettingsActivity::class.java))
                 }
                 R.id.nav_settings -> {
-                    openWebModule("/settings", "SETTINGS")
+                    startActivity(Intent(this, com.bonjee.notifier.MainActivity::class.java))
                 }
             }
             binding.drawerLayout.closeDrawer(GravityCompat.START)
@@ -288,13 +288,6 @@ class JarvisHomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun openWebModule(path: String, title: String) {
-        val intent = Intent(this, WebModuleActivity::class.java)
-        intent.putExtra(WebModuleActivity.EXTRA_PATH, path)
-        intent.putExtra(WebModuleActivity.EXTRA_TITLE, title)
-        startActivity(intent)
-    }
-    
     private fun startVoiceRecognition() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)

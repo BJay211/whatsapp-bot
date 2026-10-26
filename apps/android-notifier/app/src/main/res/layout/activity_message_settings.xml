@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:letterSpacing="0.18"
+            android:text="MESSAGE SETTINGS"
+            android:textColor="@color/cyan"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="10dp"
+            android:alpha="0.78"
+            android:text="Everything here is a preference. Android still decides whether the phone can play audio: Do Not Disturb and silent mode are respected, not overridden."
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <TextView
+            style="@style/JarvisSection"
+            android:text="ANNOUNCEMENTS" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchAnnounce"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Announce important messages aloud"
+            android:textColor="@color/text_primary" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchAnnounceBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Read the message body, not only the sender"
+            android:textColor="@color/text_primary" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchSpeakerBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Allow body text over the loudspeaker (privacy)"
+            android:textColor="@color/text_primary" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchEarphone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Earphone exception: announce under DND/silent when earphones are connected"
+            android:textColor="@color/text_primary" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchVolumeBoost"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Raise media volume while speaking, then restore it"
+            android:textColor="@color/text_primary" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchQuiet"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Quiet hours (no announcements)"
+            android:textColor="@color/text_primary" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="From (22:00)">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editQuietStart"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="time"
+                    android:maxLines="1"
+                    android:textColor="@color/text_primary" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="To (07:00)">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editQuietEnd"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="time"
+                    android:maxLines="1"
+                    android:textColor="@color/text_primary" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTestAnnounce"
+                style="@style/JarvisButton.Outlined"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="TEST SPEECH" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDndSettings"
+                style="@style/JarvisButton.Outlined"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="DND SETTINGS" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/JarvisSection"
+            android:text="NOTIFICATIONS" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchNotifyOthers"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Notify me about Other/unknown senders"
+            android:textColor="@color/text_primary" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchShowContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show message text in notifications"
+            android:textColor="@color/text_primary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnNotificationAccess"
+            style="@style/JarvisButton.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="NOTIFICATION ACCESS" />
+
+        <TextView
+            style="@style/JarvisSection"
+            android:text="WORKFLOW (ONE APP-FACING ENTRY POINT)" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="App endpoint path (/webhook/app-api)">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editAppApiPath"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:textColor="@color/text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Default country code (234)">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editCountryCode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:maxLines="1"
+                android:textColor="@color/text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:id="@+id/txtDeviceId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="monospace"
+            android:textColor="@color/text_tertiary"
+            android:textIsSelectable="true"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/txtBackendStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="monospace"
+            android:textColor="@color/amber"
+            android:textIsSelectable="true"
+            android:textSize="11sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveEndpoint"
+            style="@style/JarvisButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="SAVE ENDPOINT SETTINGS" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRegisterDevice"
+            style="@style/JarvisButton.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="REGISTER THIS DEVICE" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelfChecks"
+            style="@style/JarvisButton.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="RUN SELF-CHECKS" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenRulesFromSettings"
+            style="@style/JarvisButton.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="CONTACT RULES" />
+
+        <TextView
+            style="@style/JarvisSection"
+            android:text="STORAGE" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClearMessages"
+            style="@style/JarvisButton.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="CLEAR LOCAL MESSAGE HISTORY" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:alpha="0.65"
+            android:text="The app never contains an API key. Authentication uses the header configured under Devices &amp; n8n. Nothing here can confirm a message was sent: only the workflow's reply.status/reply.approve response can."
+            android:textColor="@color/text_tertiary"
+            android:textSize="11sp" />
+
+    </LinearLayout>
+</ScrollView>

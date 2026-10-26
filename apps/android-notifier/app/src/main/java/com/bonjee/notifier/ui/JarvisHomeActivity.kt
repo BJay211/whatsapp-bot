@@ -270,6 +270,15 @@ class JarvisHomeActivity : AppCompatActivity() {
                 R.id.nav_contacts -> {
                     startActivity(Intent(this, ContactsActivity::class.java))
                 }
+                R.id.nav_message_rules -> {
+                    startActivity(Intent(this, ContactRulesActivity::class.java))
+                }
+                R.id.nav_messages -> {
+                    startActivity(Intent(this, MessageInboxActivity::class.java))
+                }
+                R.id.nav_message_settings -> {
+                    startActivity(Intent(this, MessageSettingsActivity::class.java))
+                }
                 R.id.nav_settings -> {
                     openWebModule("/settings", "SETTINGS")
                 }

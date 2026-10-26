@@ -107,6 +107,29 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ui.ContactRulesActivity"
+            android:exported="false"
+            android:label="Message Rules"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.MessageInboxActivity"
+            android:exported="false"
+            android:label="Messages" />
+
+        <activity
+            android:name=".ui.MessageSettingsActivity"
+            android:exported="false"
+            android:label="Message Settings"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.ReplyActivity"
+            android:exported="false"
+            android:label="Reply"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".ui.WebModuleActivity"
             android:exported="false"
             android:label="Bonjee OS"

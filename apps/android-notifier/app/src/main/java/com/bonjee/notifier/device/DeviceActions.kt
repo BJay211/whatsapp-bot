@@ -20,7 +20,10 @@ import android.provider.Settings
 import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 import com.bonjee.notifier.NotificationListener
+import com.bonjee.notifier.ui.ContactRulesActivity
 import com.bonjee.notifier.ui.ContactsActivity
+import com.bonjee.notifier.ui.MessageInboxActivity
+import com.bonjee.notifier.ui.MessageSettingsActivity
 import com.bonjee.notifier.ui.SetupAccessActivity
 import java.util.Calendar
 import java.util.Locale
@@ -77,6 +80,7 @@ object DeviceActions {
             ?: systemPanel(activity, q)
             ?: deviceInfo(activity, text, q)
             ?: notifications(activity, q)
+            ?: messageScreens(activity, q)
             ?: contactSearch(activity, text, q)
             ?: searchAndNavigate(activity, text, q)
             ?: openApp(activity, text, q)
@@ -1050,6 +1054,41 @@ object DeviceActions {
         } else {
             Result.Done("Latest notifications:\n" + recent.joinToString("\n") { "- $it" })
         }
+    }
+
+    // ------------------------------------------------------- message screens
+
+    /**
+     * Opens the WhatsApp rule screens. Kept separate from [contactSearch] so
+     * "important contacts" is a rule list, not a phone-book search.
+     */
+    private fun messageScreens(activity: Activity, q: String): Result? {
+        fun matches(phrases: List<String>): Boolean =
+            phrases.any { q == it || q.startsWith("$it ") }
+
+        if (matches(listOf("message rules", "contact rules", "whatsapp rules", "important contacts",
+                "auto reply contacts", "auto-reply contacts", "auto reply settings", "reply rules"))) {
+            return Result.Open(
+                Intent(activity, ContactRulesActivity::class.java),
+                "Opening Message Rules. Important contacts are announced; Auto-Reply contacts need both " +
+                    "your switch and the workflow's authorisation.",
+            )
+        }
+        if (matches(listOf("message settings", "whatsapp settings", "announcement settings",
+                "quiet hours", "audio settings", "notification settings for whatsapp"))) {
+            return Result.Open(
+                Intent(activity, MessageSettingsActivity::class.java),
+                "Opening Message Settings: announcements, quiet hours, privacy and the workflow endpoint.",
+            )
+        }
+        if (matches(listOf("open messages", "my messages", "whatsapp messages", "message inbox",
+                "messages inbox", "show messages", "read my whatsapp"))) {
+            return Result.Open(
+                Intent(activity, MessageInboxActivity::class.java),
+                "Opening WhatsApp messages captured on this phone.",
+            )
+        }
+        return null
     }
 
     // ------------------------------------------------------- contact search

@@ -66,6 +66,101 @@ Always-on "Hey Google"-style hotword is not available to third-party apps: Andro
 grants hotword capture to a system-signed `HotwordDetectionService`, so JARVIS cannot
 answer to a wake word with the screen off.
 
+## WhatsApp rules, announcements and reply approval
+
+The app adds one local pipeline on top of the existing notification capture. It does not
+replace the archive webhook and it does not add a second workflow.
+
+```
+WhatsApp notification
+  └─ NotificationListenerService.onNotificationPosted
+       ├─ existing capture  → remember() + DeliveryQueue → notifications-ingest (unchanged)
+       └─ WhatsAppWatcher (only com.whatsapp / com.whatsapp.w4b, failures contained)
+            ├─ parse sender/body/type, resolve number via READ_CONTACTS (optional)
+            ├─ dedupe (conversation + text + 15 s window) → MessageStore
+            ├─ ContactRulesStore: Important / Auto-Reply / Other
+            ├─ ImportantNotifier (local, high-priority, body hidden on lock screen)
+            ├─ Announcer + AudioPolicy (TTS, DND/silent/quiet-hours aware)
+            └─ AutoReplyPolicy → JarvisApi (/webhook/app-api, envelope v1)
+```
+
+### Why the notification listener is the delivery path
+
+The build has no Firebase dependency, so a closed app is woken by the notification
+listener the user explicitly enabled - not by an invented push channel. `device.register`
+sends `push_provider: "none"`. FCM is documented in `docs/API_CONTRACT.md` §7 as optional
+backend work; the app never claims to receive push today. OEM battery managers can delay
+a restarted listener after the process is killed, so a missed message is a known limit,
+not a silent success.
+
+### Categories are not permissions
+
+| Bucket | Shown | Announced | May auto-reply |
+| :-- | :-- | :-- | :-- |
+| Important | High-priority notification | Yes, subject to audio rules | **Only if also** in Auto-Reply *and* enabled *and* server-authorised |
+| Auto-Reply | Normal notification | No | Only with per-contact enable + server authorisation |
+| Other / new number | Normal notification (opt-out) | No | Never |
+
+`ContactRule.sanitized()` enforces this on every write and on every load, so a hand-edited
+JSON file cannot create an "Other" contact with auto-reply on. Numbers are normalised to
+E.164 (`PhoneNumber`) and keyed on that, so `0803 123 4567`, `+2348031234567` and
+`2348031234567` are one record.
+
+### Audio: honest about Android
+
+`AudioPolicy` is pure logic; `Announcer` only reads real system state. Order: not
+important → announcements off → call in progress → quiet hours → DND (unless the earphone
+exception applies and a private output is actually connected) → silent/vibrate. Body text
+is spoken only through earphones unless the user explicitly allowed the loudspeaker. The
+optional volume behaviour raises media volume only while speaking and restores it; it
+skips silent mode entirely. The app never requests notification-policy access and cannot
+and does not claim to override Do Not Disturb. When speech is suppressed the notification
+says which rule held it.
+
+### Message lifecycle
+
+```
+received → pending_approval → approved → sending → sent
+        ↘ cancelled          ↘ cancelled   ↘ failed → pending_approval (re-approval)
+```
+
+`ReplyFlow` is the only transition table; `MessageRecord.transition()` returns null for an
+illegal move, so `received → sent` is impossible. Only a backend `status` of `sent`
+renders SENT. A timeout is not a failure to retry: the app calls `reply.status` first, and
+a later "sent" resolves the record without a second send. Request ids are deterministic
+for sends (`send-<message_id>-r<attempt>`), which lets the workflow de-duplicate a replay.
+
+### Reply screen guarantees
+
+- `reply.generate` (`mode: approval`) returns a draft and never sends.
+- The full text is shown in an editable field and can be read aloud; neither sends.
+- APPROVE & SEND opens a dialog with the exact recipient and text, then calls
+  `reply.approve` with that exact string and `auto: false`.
+- REPLY MYSELF opens `wa.me/<number>` and never calls `reply.approve`.
+- CANCEL calls `reply.cancel` and keeps the draft locally.
+- Every failure shows the real HTTP result; there is no simulated success.
+
+### One workflow, one app endpoint
+
+All new app requests go to the single configurable path (default
+`/webhook/app-api`) with the same envelope. The Evolution inbound webhook
+(`/webhook/personal-ai-whatsapp`) stays server-to-server and untouched. Full action
+schemas, auth rules, SQL migrations and the n8n node checklist are in
+`docs/API_CONTRACT.md`.
+
+### Storage
+
+SharedPreferences + `org.json` (the project's existing pattern), so no new dependency is
+needed:
+
+| File | Key | Contents |
+| :-- | :-- | :-- |
+| `bonjee_whatsapp` | `contact_rules_v1` | Contact rules as a JSON array, E.164 keys |
+| `bonjee_whatsapp` | `messages_v1` | Last 300 message/draft records |
+
+Server-authorised auto-reply numbers live in the main prefs and are written only from a
+backend response - a local toggle alone is never authorisation.
+
 ## Context Based Timing
 The `context-summarizer` workflow will run after every ingest, or be triggered internally. It will check the following rules against the newly ingested items: 
 

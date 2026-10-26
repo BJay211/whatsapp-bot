@@ -38,6 +38,17 @@ object CommandCatalog {
             ),
         ),
         Section(
+            "WHATSAPP RULES & MESSAGES",
+            listOf(
+                "message rules",
+                "important contacts",
+                "auto reply contacts",
+                "open messages",
+                "message settings",
+                "quiet hours",
+            ),
+        ),
+        Section(
             "SCREEN AND SOUND",
             listOf(
                 "brightness up",
@@ -121,6 +132,7 @@ object CommandCatalog {
         appendLine("Apps - \"open WhatsApp\", \"launch Gmail\", \"open calculator\".")
         appendLine("Calls - \"call mum\", \"text John saying I'm coming\", \"find Ada in contacts\".")
         appendLine("WhatsApp - \"call John on whatsapp\", \"whatsapp Ada saying hello\".")
+        appendLine("Rules - \"message rules\", \"important contacts\", \"open messages\".")
         appendLine("Screen - \"brightness up\", \"brightness 60 percent\", \"auto brightness\".")
         appendLine("Sound - \"volume up\", \"volume 40\", \"mute\", \"vibrate mode\", \"sound on\".")
         appendLine("Quick - \"torch on\", \"pause\", \"next song\", \"set alarm for 6:30\", \"timer 10 minutes\".")

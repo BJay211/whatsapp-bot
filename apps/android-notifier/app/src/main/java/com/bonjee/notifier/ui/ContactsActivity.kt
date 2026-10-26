@@ -76,6 +76,9 @@ class ContactsActivity : AppCompatActivity() {
         binding.listContacts.adapter = adapter
 
         binding.btnSearch.setOnClickListener { search() }
+        binding.btnMessageRules.setOnClickListener {
+            startActivity(Intent(this, ContactRulesActivity::class.java))
+        }
         binding.editContact.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 search()

@@ -47,6 +47,18 @@
                 android:id="@+id/nav_contacts"
                 android:icon="@android:drawable/ic_menu_call"
                 android:title="Contacts" />
+            <item
+                android:id="@+id/nav_message_rules"
+                android:icon="@android:drawable/ic_menu_sort_by_size"
+                android:title="Message Rules" />
+            <item
+                android:id="@+id/nav_messages"
+                android:icon="@android:drawable/ic_dialog_email"
+                android:title="WhatsApp Messages" />
+            <item
+                android:id="@+id/nav_message_settings"
+                android:icon="@android:drawable/ic_lock_silent_mode"
+                android:title="Message Settings" />
         </menu>
     </item>
 

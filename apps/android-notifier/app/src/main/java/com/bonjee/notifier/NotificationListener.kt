@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import com.bonjee.notifier.whatsapp.WhatsAppWatcher
 
 /**
  * Captures posted notifications and forwards them to the n8n webhook.
@@ -37,6 +38,17 @@ class NotificationListener : NotificationListenerService() {
             payload.optString("title"),
             payload.optString("content").ifBlank { payload.optString("big_text") },
         )
+
+        // WhatsApp messages are also fed into the rules pipeline (important
+        // notifications, draft replies, auto-reply policy). This must never stop
+        // the generic capture below, so failures are contained here.
+        if (WhatsAppWatcher.isWhatsApp(sbn.packageName)) {
+            try {
+                WhatsAppWatcher.handle(this, sbn, prefs)
+            } catch (t: Throwable) {
+                Log.w(tag, "WhatsApp rules pipeline failed: ${t.message}")
+            }
+        }
 
         val queue = DeliveryQueue(this)
         val url = prefs.notificationUrl()

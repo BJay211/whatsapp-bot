@@ -9,8 +9,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Read-only: the Calendar screen lists events. New events are created with
+         CalendarContract.ACTION_INSERT, which the calendar app saves under its own
+         permission, so JARVIS does not need WRITE_CALENDAR. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <!-- Lets JARVIS place a call itself for "call mum"; without it the dialer is
          opened with the number already filled in. -->
     <uses-permission android:name="android.permission.CALL_PHONE" />

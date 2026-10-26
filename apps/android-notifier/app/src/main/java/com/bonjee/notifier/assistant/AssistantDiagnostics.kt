@@ -60,6 +60,17 @@ object AssistantDiagnostics {
             "service bound by permission: " +
                 (info?.permission?.takeIf { it.isNotBlank() } ?: "NONE (the system will ignore it)"),
         )
+        // Some launchers and OEM triggers bypass the assistant role and fire
+        // ACTION_ASSIST directly at an exported activity.
+        val answersAssist = try {
+            context.packageManager.queryIntentActivities(
+                Intent(Intent.ACTION_ASSIST).addCategory(Intent.CATEGORY_DEFAULT),
+                0,
+            ).any { it.activityInfo.packageName == pkg }
+        } catch (t: Throwable) {
+            false
+        }
+        appendLine("this app answers ACTION_ASSIST: ${yesNo(answersAssist)}")
         appendLine()
 
         // ---- the components named by the config --------------------------
@@ -112,6 +123,7 @@ object AssistantDiagnostics {
                 ) == PackageManager.PERMISSION_GRANTED,
             ),
         )
+        appendLine("device locked right now: ${yesNo(isKeyguardLocked(context))}")
         appendLine()
 
         appendLine("Verdict")
@@ -244,6 +256,13 @@ object AssistantDiagnostics {
     }
 
     private fun yesNo(value: Boolean) = if (value) "yes" else "NO"
+
+    private fun isKeyguardLocked(context: Context): Boolean = try {
+        (context.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager)
+            ?.isKeyguardLocked == true
+    } catch (t: Throwable) {
+        false
+    }
 
     /** Lets the user send the report to themselves (mail, chat, notes). */
     fun shareIntent(report: String): Intent =

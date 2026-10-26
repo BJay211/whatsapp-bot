@@ -303,17 +303,30 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Runs the exact flow the system trigger uses - AskActivity in assistant mode,
-     * which listens, calls the endpoint and speaks the reply - without depending on
-     * the assistant role. If this works but the gesture does not, the problem is
-     * the ROM's routing, not the app.
+     * Runs the same destinations the system trigger uses - the JARVIS home page in
+     * assistant mode, plus the ASSIST intent that some ROMs dispatch - without
+     * depending on the assistant role. If this works but the gesture does not, the
+     * problem is the ROM's routing, not the app.
      */
     private fun testVoiceAssistant() {
-        val intent = Intent(this, AskActivity::class.java).apply {
-            putExtra(AskActivity.EXTRA_FROM_ASSISTANT, true)
+        val intent = Intent(this, com.bonjee.notifier.ui.JarvisHomeActivity::class.java).apply {
+            putExtra(
+                com.bonjee.notifier.ui.JarvisHomeActivity.EXTRA_FROM_ASSISTANT,
+                true,
+            )
         }
         try {
             startActivity(intent)
+            return
+        } catch (t: Throwable) {
+            // Fall through to the older Ask screen so the test still shows something.
+        }
+        try {
+            startActivity(
+                Intent(this, AskActivity::class.java).apply {
+                    putExtra(AskActivity.EXTRA_FROM_ASSISTANT, true)
+                },
+            )
         } catch (t: Throwable) {
             toast("Could not open the assistant screen")
         }

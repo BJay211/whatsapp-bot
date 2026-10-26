@@ -37,6 +37,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Second route to the assistant. The standard path is the
+                 VoiceInteractionService + assistant role, but some launchers,
+                 accessibility triggers and OEM gestures dispatch
+                 ACTION_ASSIST instead. Mirroring it here means the home page
+                 opens for those too, with no new permission. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <activity

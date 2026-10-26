@@ -79,12 +79,20 @@ class JarvisHomeActivity : AppCompatActivity() {
     /**
      * Handles an invocation from Android's assistant role.
      *
-     * The system can call us while the phone is locked, so the window is allowed
-     * to show over the keyguard and turn the screen on. Listening starts right
-     * away, which is what the long-press gesture is expected to do.
+     * Two intents reach us:
+     *  - EXTRA_FROM_ASSISTANT, set by our own voice-interaction session;
+     *  - ACTION_ASSIST, sent directly by launchers/OEM triggers that bypass the
+     *    session and start an assist activity.
+     *
+     * The system can call either while the phone is locked, so the window is
+     * allowed to show over the keyguard and turn the screen on. Listening starts
+     * right away, which is what the long-press gesture is expected to do.
      */
     private fun handleAssistantLaunch(intent: Intent?) {
-        if (intent?.getBooleanExtra(EXTRA_FROM_ASSISTANT, false) != true) return
+        val fromAssistant =
+            intent?.getBooleanExtra(EXTRA_FROM_ASSISTANT, false) == true ||
+                intent?.action == Intent.ACTION_ASSIST
+        if (!fromAssistant) return
 
         showOverKeyguard()
 

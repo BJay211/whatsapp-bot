@@ -115,7 +115,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun requestAssistantRole() {
         val intent = com.bonjee.notifier.assistant.AssistantRole.roleRequestIntent(this)
-        if (intent != null) {
+        if (intent != null && com.bonjee.notifier.assistant.AssistantRole.canHandle(this, intent)) {
             try {
                 requestAssistantRole.launch(intent)
                 return
@@ -123,6 +123,7 @@ class MainActivity : AppCompatActivity() {
                 // No activity handles the role request; fall through to Settings.
             }
         }
+        toast("Opening Android settings - choose Digital assistant app, then JARVIS (Bonjee)")
         com.bonjee.notifier.assistant.AssistantRole.openSettings(this)
     }
 

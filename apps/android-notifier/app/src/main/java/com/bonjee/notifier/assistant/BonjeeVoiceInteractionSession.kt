@@ -14,14 +14,14 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.bonjee.notifier.AskActivity
+import com.bonjee.notifier.ui.JarvisHomeActivity
 
 /**
- * Bridges an Android assistant invocation to the existing JARVIS conversation UI.
+ * Bridges an Android assistant invocation to the existing JARVIS home screen.
  *
- * The session normally owns no UI: it starts the already-existing [AskActivity]
- * in "assistant mode", which listens, sends the recognised text to the configured
- * n8n endpoint and speaks the answer back. Everything the app already does
+ * Invoking the assistant opens [JarvisHomeActivity] - the same page the launcher
+ * opens - and asks it to listen immediately, rather than dropping the user on a
+ * secondary "Ask your assistant" screen. Everything the app already does
  * (settings, history, backend, auth header) is untouched.
  *
  * If the OEM refuses the activity start - HyperOS and MIUI sometimes block a
@@ -61,13 +61,13 @@ class BonjeeVoiceInteractionSession(context: Context) : VoiceInteractionSession(
      * @return true when some activity accepted the intent.
      */
     private fun openAssistantUi(): Boolean {
-        val intent = Intent(context, AskActivity::class.java).apply {
+        val intent = Intent(context, JarvisHomeActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP,
             )
-            putExtra(AskActivity.EXTRA_FROM_ASSISTANT, true)
+            putExtra(JarvisHomeActivity.EXTRA_FROM_ASSISTANT, true)
         }
 
         // startVoiceActivity() is the documented way for a session to put UI on

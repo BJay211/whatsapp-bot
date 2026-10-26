@@ -1,9 +1,11 @@
 package com.bonjee.notifier.ui
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.view.View
+import android.view.WindowManager
 import android.view.animation.AnimationUtils
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,6 +67,50 @@ class JarvisHomeActivity : AppCompatActivity() {
         setupAnimations()
         setupClickListeners()
         setupNavigationDrawer()
+        handleAssistantLaunch(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAssistantLaunch(intent)
+    }
+
+    /**
+     * Handles an invocation from Android's assistant role.
+     *
+     * The system can call us while the phone is locked, so the window is allowed
+     * to show over the keyguard and turn the screen on. Listening starts right
+     * away, which is what the long-press gesture is expected to do.
+     */
+    private fun handleAssistantLaunch(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_FROM_ASSISTANT, false) != true) return
+
+        showOverKeyguard()
+
+        // Make sure the voice card is the one on screen before the recogniser opens.
+        isVoiceMode = true
+        binding.voiceInputCard.visibility = View.VISIBLE
+        binding.textInputCard.visibility = View.GONE
+
+        // Wait for the window to be attached; launching the recogniser straight
+        // from onCreate makes some OEM builds drop the dialog.
+        binding.root.post {
+            if (!isFinishing) startVoiceRecognition()
+        }
+    }
+
+    private fun showOverKeyguard() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
+            )
+        }
     }
 
     override fun onResume() {
@@ -189,7 +235,9 @@ class JarvisHomeActivity : AppCompatActivity() {
                 R.id.nav_assistant -> {
                     val roleIntent =
                         com.bonjee.notifier.assistant.AssistantRole.roleRequestIntent(this)
-                    if (roleIntent != null) {
+                    if (roleIntent != null &&
+                        com.bonjee.notifier.assistant.AssistantRole.canHandle(this, roleIntent)
+                    ) {
                         try {
                             assistantRoleLauncher.launch(roleIntent)
                         } catch (t: Throwable) {
@@ -269,5 +317,13 @@ class JarvisHomeActivity : AppCompatActivity() {
         } else {
             super.onBackPressed()
         }
+    }
+
+    companion object {
+        /**
+         * Set by the assistant session so the home screen knows to listen
+         * immediately instead of waiting for a tap on the microphone.
+         */
+        const val EXTRA_FROM_ASSISTANT = "bonjee.extra.FROM_ASSISTANT"
     }
 }

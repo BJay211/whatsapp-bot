@@ -83,15 +83,20 @@ object AssistantRole {
     /**
      * Opens the assistant picker. The exact screen differs per OEM (HyperOS/MIUI
      * use "Digital assistant app"), so try the dedicated action first and fall
-     * back to the broader default-apps and root settings screens.
+     * back to the broader default-apps, root settings and this app's own page.
      */
     fun openSettings(activity: Activity) {
         val candidates = listOf(
             Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
             Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
             Intent(Settings.ACTION_SETTINGS),
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.parse("package:" + activity.packageName),
+            ),
         )
         for (intent in candidates) {
+            if (!canHandle(activity, intent)) continue
             try {
                 activity.startActivity(intent)
                 return
@@ -104,5 +109,12 @@ object AssistantRole {
             "Open Settings > Apps > Default apps > Digital assistant app",
             Toast.LENGTH_LONG,
         ).show()
+    }
+
+    /** True when some activity on the device can open this intent. */
+    fun canHandle(context: Context, intent: Intent): Boolean = try {
+        context.packageManager.queryIntentActivities(intent, 0).isNotEmpty()
+    } catch (t: Throwable) {
+        false
     }
 }

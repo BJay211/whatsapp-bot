@@ -37,6 +37,8 @@ object AssistantDiagnostics {
         appendLine("package: $pkg")
         appendLine("version: ${versionName(context)} (code ${versionCode(context)})")
         appendLine("service: ${ours.flattenToShortString()}")
+        appendLine("gesture opens: com.bonjee.notifier.ui.JarvisHomeActivity")
+        appendLine("lock screen: allowed (supportsLaunchVoiceAssistFromKeyguard)")
         appendLine()
 
         // ---- what the system can discover --------------------------------

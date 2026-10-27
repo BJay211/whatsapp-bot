@@ -23,6 +23,9 @@ build/
 *.keystore
 *.jks
 
+# Laptop agent: local token + command list + log stay on the machine
+laptop-agent/config.json
+
 # Logs / OS cruft
 *.log
 .DS_Store

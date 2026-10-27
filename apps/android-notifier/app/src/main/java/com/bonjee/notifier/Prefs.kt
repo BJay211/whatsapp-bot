@@ -256,6 +256,115 @@ class Prefs private constructor(context: Context) {
     fun isServerAuthorized(number: String): Boolean =
         serverAuthorizedNumbers.contains(PhoneNumber.normalize(number, defaultCountryCode))
 
+    // ------------------------------------------------------------- laptop agent
+
+    /** Master switch: when off, no sentence is ever sent to the laptop. */
+    var laptopEnabled: Boolean
+        get() = sp.getBoolean(KEY_LAPTOP_ENABLED, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_LAPTOP_ENABLED, value).apply()
+        }
+
+    /** LAN IP or hostname of the laptop running the agent. */
+    var laptopHost: String
+        get() = sp.getString(KEY_LAPTOP_HOST, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_LAPTOP_HOST, value.trim()).apply()
+        }
+
+    var laptopPort: Int
+        get() = sp.getInt(KEY_LAPTOP_PORT, DEFAULT_LAPTOP_PORT)
+        set(value) {
+            val port = if (value in 1..65535) value else DEFAULT_LAPTOP_PORT
+            sp.edit().putInt(KEY_LAPTOP_PORT, port).apply()
+        }
+
+    /** Shared secret from the agent's config.json; never leaves the LAN. */
+    var laptopToken: String
+        get() = sp.getString(KEY_LAPTOP_TOKEN, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_LAPTOP_TOKEN, value.trim()).apply()
+        }
+
+    /**
+     * When true (the default) every laptop command is shown to the user first,
+     * with its exact text, and runs only after Approve.
+     */
+    var laptopAskBeforeRun: Boolean
+        get() = sp.getBoolean(KEY_LAPTOP_APPROVE, true)
+        set(value) {
+            sp.edit().putBoolean(KEY_LAPTOP_APPROVE, value).apply()
+        }
+
+    /** The user accepts that the agent runs raw PowerShell. Off by default. */
+    var laptopFreeMode: Boolean
+        get() = sp.getBoolean(KEY_LAPTOP_FREE, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_LAPTOP_FREE, value).apply()
+        }
+
+    var laptopLastSeenAt: Long
+        get() = sp.getLong(KEY_LAPTOP_LAST_SEEN, 0L)
+        set(value) {
+            sp.edit().putLong(KEY_LAPTOP_LAST_SEEN, value).apply()
+        }
+
+    fun laptopConfigured(): Boolean =
+        laptopHost.isNotBlank() && laptopToken.isNotBlank()
+
+    /** `http://host:port`, tolerating a pasted scheme or an explicit port. */
+    fun laptopBaseUrl(): String {
+        val raw = laptopHost.trim().trimEnd('/')
+        if (raw.isEmpty()) return ""
+        val withScheme = when {
+            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+            else -> "http://$raw"
+        }
+        val hostPart = withScheme.substringAfter("://")
+        val hasPort = hostPart.contains(':') && !hostPart.substringAfter(':').contains('/')
+        return if (hasPort) withScheme else "$withScheme:$laptopPort"
+    }
+
+    // ------------------------------------------------------------------- AI
+
+    /** Let general questions go straight to the user's LLM instead of n8n. */
+    var aiEnabled: Boolean
+        get() = sp.getBoolean(KEY_AI_ENABLED, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_AI_ENABLED, value).apply()
+        }
+
+    /** OpenAI-compatible base URL. Groq by default; not locked. */
+    var aiBaseUrl: String
+        get() = sp.getString(KEY_AI_BASE, DEFAULT_AI_BASE) ?: DEFAULT_AI_BASE
+        set(value) {
+            sp.edit().putString(KEY_AI_BASE, cleanBase(value, DEFAULT_AI_BASE)).apply()
+        }
+
+    /**
+     * Stored in this app's private preferences and sent only to [aiBaseUrl].
+     * It is never written to logs, the n8n payload or the APK.
+     */
+    var aiApiKey: String
+        get() = sp.getString(KEY_AI_KEY, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_AI_KEY, value.trim()).apply()
+        }
+
+    var aiModel: String
+        get() = sp.getString(KEY_AI_MODEL, DEFAULT_AI_MODEL) ?: DEFAULT_AI_MODEL
+        set(value) {
+            sp.edit().putString(KEY_AI_MODEL, value.trim().ifEmpty { DEFAULT_AI_MODEL }).apply()
+        }
+
+    var aiLastOkAt: Long
+        get() = sp.getLong(KEY_AI_LAST_OK, 0L)
+        set(value) {
+            sp.edit().putLong(KEY_AI_LAST_OK, value).apply()
+        }
+
+    fun aiConfigured(): Boolean = aiEnabled && aiApiKey.isNotBlank() && aiModel.isNotBlank()
+
     var lastMessageSyncAt: Long
         get() = sp.getLong(KEY_LAST_MESSAGE_SYNC, 0L)
         set(value) {
@@ -307,10 +416,25 @@ class Prefs private constructor(context: Context) {
         const val KEY_AUTO_REPLY_GLOBAL = "auto_reply_global"
         const val KEY_SERVER_AUTHORIZED = "server_authorized_numbers"
         const val KEY_LAST_MESSAGE_SYNC = "last_message_sync"
+        const val KEY_LAPTOP_ENABLED = "laptop_enabled"
+        const val KEY_LAPTOP_HOST = "laptop_host"
+        const val KEY_LAPTOP_PORT = "laptop_port"
+        const val KEY_LAPTOP_TOKEN = "laptop_token"
+        const val KEY_LAPTOP_APPROVE = "laptop_ask_before_run"
+        const val KEY_LAPTOP_FREE = "laptop_free_mode"
+        const val KEY_LAPTOP_LAST_SEEN = "laptop_last_seen"
+        const val KEY_AI_ENABLED = "ai_enabled"
+        const val KEY_AI_BASE = "ai_base_url"
+        const val KEY_AI_KEY = "ai_api_key"
+        const val KEY_AI_MODEL = "ai_model"
+        const val KEY_AI_LAST_OK = "ai_last_ok"
 
         const val DEFAULT_HEALTH_PATH = "/webhook/health"
         const val DEFAULT_APP_API_PATH = "/webhook/app-api"
         const val DEFAULT_AUTH_HEADER = "Authorization"
+        const val DEFAULT_LAPTOP_PORT = 8787
+        const val DEFAULT_AI_BASE = "https://api.groq.com/openai/v1"
+        const val DEFAULT_AI_MODEL = "llama-3.3-70b-versatile"
 
         @Volatile
         private var instance: Prefs? = null

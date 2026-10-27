@@ -39,10 +39,14 @@ class ActionsActivity : AppCompatActivity() {
         binding.btnActionCommands.setOnClickListener { open(CommandsActivity::class.java) }
         binding.btnActionAccess.setOnClickListener { open(SetupAccessActivity::class.java) }
         binding.btnActionAsk.setOnClickListener { open(AskActivity::class.java) }
+        binding.btnActionLaptop.setOnClickListener { open(LaptopActivity::class.java) }
+        binding.btnActionAi.setOnClickListener { open(AiSettingsActivity::class.java) }
 
         binding.txtActionsFooter.text =
             "The web dashboard is not required. Memory, tasks, calendar and automation switches " +
-                "are native; only the optional cloud memory/search and task sync call the workflow."
+                "are native; only the optional cloud memory/search and task sync call the workflow. " +
+                "Laptop control talks straight to the agent on your computer; AI answers come " +
+                "from the provider you configured."
     }
 
     override fun onResume() {

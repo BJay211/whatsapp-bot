@@ -132,6 +132,12 @@ class AutomationsActivity : AppCompatActivity() {
         }
         binding.btnTestAnnouncement.setOnClickListener { testAnnouncement() }
         binding.btnAutomationRegister.setOnClickListener { registerDevice() }
+        binding.btnAutomationAi.setOnClickListener {
+            startActivity(Intent(this, AiSettingsActivity::class.java))
+        }
+        binding.btnAutomationLaptop.setOnClickListener {
+            startActivity(Intent(this, LaptopActivity::class.java))
+        }
     }
 
     private fun loadSwitches() {
@@ -209,6 +215,46 @@ class AutomationsActivity : AppCompatActivity() {
             appendLine("endpoint: " + prefs.appApiUrl())
             appendLine("device: $registered")
             append("server-authorised numbers: $authorized")
+        }
+
+        binding.txtAiCardStatus.text = when {
+            !prefs.aiEnabled ->
+                "Off. Questions go to the n8n archive instead."
+            prefs.aiApiKey.isBlank() ->
+                "On, but no API key is saved, so it cannot answer yet."
+            else -> buildString {
+                append(prefs.aiModel)
+                append(" via ")
+                append(prefs.aiBaseUrl)
+                if (prefs.aiLastOkAt > 0) {
+                    append(" · last success ")
+                    append(
+                        SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
+                            .format(Date(prefs.aiLastOkAt)),
+                    )
+                } else {
+                    append(" · not tested yet")
+                }
+            }
+        }
+
+        binding.txtLaptopCardStatus.text = when {
+            !prefs.laptopEnabled ->
+                "Off. Nothing is ever sent to a computer."
+            !prefs.laptopConfigured() ->
+                "On, but the address or token is missing."
+            else -> buildString {
+                append(prefs.laptopBaseUrl())
+                append(" · ")
+                append(if (prefs.laptopAskBeforeRun) "asks before running" else "runs without asking")
+                if (prefs.laptopLastSeenAt > 0) {
+                    append(" · last seen ")
+                    append(
+                        SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
+                            .format(Date(prefs.laptopLastSeenAt)),
+                    )
+                }
+            }
         }
     }
 

@@ -14,13 +14,18 @@ n8n instance. Also gives you a place to ask your assistant questions.
 | Capture every posted notification (title, text, app name, package, timestamp) | `NotificationListener` (device-side) |
 | Durable offline queue with automatic retry | `DeliveryQueue` (SQLite on device) |
 | Forward payloads to the n8n webhook | `QueueDrainer` -> OkHttp |
-| Ask the assistant a question | `AskActivity` -> `POST {base}/webhook/personal-ai-ask` |
+| Ask the assistant a question | `AskActivity` -> AI provider, then `POST {base}/webhook/personal-ai-ask` |
+| Run a command on your own computer | `LaptopActivity` / "on my laptop ..." -> `laptop-agent` over the LAN |
+| Answer general questions with your own LLM | `AiSettingsActivity` + `ai/AiClient` (Groq by default) |
 | Connection self-test | `MainActivity` -> test button |
 | Per-app ignore list, pause/resume, visible status | `MainActivity` + persistent notification |
 
 ### Privacy model
-* Nothing is sent anywhere except the base URL **you** type into the app.
-* No backend secrets, no LLM keys, no WhatsApp credentials live in the app.
+* Nothing is sent anywhere except the base URL **you** type into the app, the AI
+  provider you configure, and the laptop agent on your own network.
+* No backend secrets or API keys are bundled. An AI key you add at runtime is kept in
+  this app's private storage and sent only to your provider. The laptop token comes from
+  the agent's `config.json` and never leaves your Wi-Fi.
 * The app never reads other apps' data, only notifications the OS hands it
   through the user-granted **Notification access** permission.
 * If a package is on the ignore list (for example your password manager) it is
@@ -91,6 +96,8 @@ powershell -ExecutionPolicy Bypass -File build-apk.ps1 -Release
 | Assistant (ask) path | `/webhook/personal-ai-ask` |
 | Auth token / header | leave blank unless you add header auth to n8n |
 | Apps to ignore | e.g. `com.eg.android.AlipayGphone,com.android.chrome` (optional) |
+| Laptop agent (Automations > Laptop Control) | address + token printed by `laptop-agent/start-agent.ps1` |
+| AI (Automations > AI Assistant) | base URL, API key and model, e.g. Groq `llama-3.3-70b-versatile` |
 
 Steps in the app:
 
@@ -103,6 +110,9 @@ Steps in the app:
 4. Tap **Start capture service**. A persistent "Bonjee Notifier active"
    notification appears - that is the honest status indicator.
 5. Tap **Ask your assistant** to query your archive.
+6. Optional: **Automations > Laptop Control** to reach your computer, and
+   **Automations > AI Assistant** for direct LLM answers. Both are off until configured;
+   laptop commands are approved before they run.
 
 ---
 
@@ -145,6 +155,13 @@ side.
 app/src/main/java/com/bonjee/notifier/
   MainActivity.kt          config, status, self-test, service control
   AskActivity.kt           assistant question screen
+  laptop/LaptopCommand.kt  pure parser for "on my laptop ..." sentences
+  laptop/LaptopClient.kt   HTTP client for the laptop agent
+  laptop/LaptopDiscovery.kt  finds the agent on the phone's Wi-Fi
+  laptop/LaptopHistoryStore.kt  last 40 runs, stored locally
+  ai/AiClient.kt           OpenAI-compatible chat (Groq by default)
+  ui/LaptopActivity.kt     connection, safety switches, run, history
+  ui/AiSettingsActivity.kt key/model settings and TEST
   NotificationListener.kt  capture + enqueue
   DeliveryQueue.kt         SQLite durable queue
   QueueDrainer.kt          delivery + retry logic

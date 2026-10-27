@@ -36,6 +36,14 @@
                 android:icon="@android:drawable/ic_menu_manage"
                 android:title="Automations" />
             <item
+                android:id="@+id/nav_laptop"
+                android:icon="@android:drawable/ic_menu_myplaces"
+                android:title="Laptop Control" />
+            <item
+                android:id="@+id/nav_ai"
+                android:icon="@android:drawable/ic_menu_info_details"
+                android:title="AI Assistant" />
+            <item
                 android:id="@+id/nav_commands"
                 android:icon="@android:drawable/ic_menu_view"
                 android:title="Device Commands" />

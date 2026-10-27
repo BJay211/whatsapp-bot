@@ -1,6 +1,7 @@
 package com.bonjee.notifier.whatsapp
 
 import com.bonjee.notifier.device.CommandChain
+import com.bonjee.notifier.laptop.LaptopCommand
 
 /**
  * Executable specification for the WhatsApp rules.
@@ -27,6 +28,7 @@ object SelfChecks {
         addAll(audio())
         addAll(conversation())
         addAll(chains())
+        addAll(laptops())
     }
 
     /** Runs [run] and prints a report; returns true when everything passed. */
@@ -363,6 +365,85 @@ object SelfChecks {
         add(
             "message punctuation is preserved",
             CommandChain.clean("message John saying see you at 5.") == "message John saying see you at 5.",
+        )
+        return out
+    }
+
+    // ----------------------------------------------------------- laptop command
+
+    private fun laptops(): List<Check> {
+        val out = ArrayList<Check>()
+        fun add(name: String, ok: Boolean, detail: String = "") = out.add(Check(name, ok, detail))
+
+        val prefixed = LaptopCommand.stripPrefix("on my laptop open notepad")
+        add("laptop: \"on my laptop\" prefix is stripped", prefixed == "open notepad", prefixed.toString())
+
+        add(
+            "laptop: \"laptop:\" prefix is stripped",
+            LaptopCommand.stripPrefix("laptop: notepad") == "notepad",
+        )
+        add(
+            "laptop: suffix \"on my laptop\" is stripped",
+            LaptopCommand.stripPrefix("open notepad on my laptop") == "open notepad",
+        )
+        add(
+            "laptop: a longer word is not a laptop command",
+            LaptopCommand.stripPrefix("open notepad on my laptops") == null,
+        )
+        add(
+            "laptop: a plain question is not routed to the laptop",
+            LaptopCommand.stripPrefix("what is the weather today") == null,
+        )
+        add(
+            "laptop: a how-question ending in \"on my laptop\" stays a question",
+            LaptopCommand.stripPrefix("how do I install python on my laptop") == null,
+        )
+
+        val withArgs = LaptopCommand.parse("open_app app=notepad")
+        add(
+            "laptop: parse keeps the name and one argument",
+            withArgs.name == "open_app" && withArgs.args["app"] == "notepad",
+            withArgs.toString(),
+        )
+        val bare = LaptopCommand.parse("notepad")
+        add("laptop: a bare word has no arguments", bare.name == "notepad" && bare.args.isEmpty())
+
+        val quoted = LaptopCommand.parse("open_app app=\"visual studio code\"")
+        add(
+            "laptop: quotes keep spaces in one argument",
+            quoted.args["app"] == "visual studio code",
+            quoted.args.toString(),
+        )
+        val freeText = LaptopCommand.parse("echo hello world")
+        add(
+            "laptop: free text stays a command name",
+            freeText.name == "echo hello world" && freeText.args.isEmpty(),
+            freeText.name,
+        )
+
+        val formatted = LaptopCommand.format(quoted)
+        add(
+            "laptop: format restores quotes around spaces",
+            formatted == "open_app app=\"visual studio code\"",
+            formatted,
+        )
+        add(
+            "laptop: format leaves simple arguments unquoted",
+            LaptopCommand.format(withArgs) == "open_app app=notepad",
+        )
+
+        add(
+            "laptop: remove-item is flagged as dangerous",
+            LaptopCommand.isDangerous(LaptopCommand.parse("remove-item C:/temp/x -Recurse")),
+        )
+        add(
+            "laptop: notepad is not flagged as dangerous",
+            !LaptopCommand.isDangerous(LaptopCommand.parse("notepad")),
+        )
+        add("laptop: whoami is read-only", LaptopCommand.isReadOnly(LaptopCommand.parse("whoami")))
+        add(
+            "laptop: open_app is not read-only",
+            !LaptopCommand.isReadOnly(LaptopCommand.parse("open_app app=notepad")),
         )
         return out
     }

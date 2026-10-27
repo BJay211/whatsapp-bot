@@ -99,6 +99,22 @@
                         android:text="CALENDAR" />
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionLaptop"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="LAPTOP CONTROL" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnActionAi"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="AI ASSISTANT" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnActionInbox"
                         style="@style/JarvisButton.Outlined"
                         android:layout_width="match_parent"

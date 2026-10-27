@@ -602,3 +602,113 @@ Important: `wa_auto_reply_rules.authorized` starts `false`. Only a server-side a
 
 No claim is made that messages are being sent through n8n until the endpoint returns
 real `reply.approve`/`reply.status` responses.
+
+---
+
+## 10. Laptop control protocol (not n8n)
+
+Laptop control is a **separate, direct LAN channel**. It never touches n8n, never uses
+`/webhook/app-api`, and has no cloud component. Mixing it into the workflow would make a
+working feature depend on a service that currently returns 404.
+
+The agent is `laptop-agent/agent.ps1`; its README is the operator guide and repeats the
+wire format below.
+
+### 10.1 Transport
+
+| Property | Value |
+| :-- | :-- |
+| Scheme | `http` on the user's own LAN (Tailscale or similar overlay if remote) |
+| Default port | `8787` (`port` in `config.json`, editable in the app) |
+| Auth header | `X-JARVIS-Token: <token from config.json>` |
+| Content type | `application/json; charset=utf-8` |
+| App timeouts | connect 5 s, write 20 s, read 200 s, call 210 s |
+| Agent timeout | `timeout_seconds` (default 60), then the process tree is killed |
+
+`GET /ping` is the only unauthenticated route. It exists so the app's discovery scan can
+identify the agent without a token; it leaks only name, version and port.
+
+### 10.2 Routes
+
+| Method | Path | Auth | Purpose |
+| :-- | :-- | :-- | :-- |
+| `GET` | `/ping` | no | Discovery and liveness. `name` must contain "jarvis" |
+| `GET` | `/health` | yes | Mode, host, working directory and the command list |
+| `POST` | `/execute` | yes | Run one command |
+
+`/execute` request:
+
+```json
+{
+  "request_id": "0d5b6c1e-...",
+  "command": "open_app",
+  "raw": "open_app app=notepad",
+  "args": { "app": "notepad" },
+  "client": "android",
+  "app_version": "3.3"
+}
+```
+
+`/execute` response (HTTP 200 even on a command failure - `ok` and `exit_code` decide):
+
+```json
+{
+  "ok": true,
+  "request_id": "0d5b6c1e-...",
+  "command": "open_app app=notepad",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "",
+  "duration_ms": 412,
+  "timed_out": false,
+  "error": ""
+}
+```
+
+| Status | Meaning |
+| :-- | :-- |
+| 400 | Bad JSON, unknown argument, missing required argument, nothing to run |
+| 401 | Missing/wrong `X-JARVIS-Token` |
+| 403 | Not in the allowlist (allowlist mode), including all raw PowerShell |
+| 404 | Unknown route |
+| 405 | Wrong method |
+| 413 | Body over 256 KB |
+| 500 | Agent bug; details are in `agent.log` |
+
+### 10.3 Command model
+
+- Default `mode` is `allowlist`: only names in `config.json` run.
+- An optional `aliases` array lets a spoken phrase resolve to an allowlisted name. The
+  agent tries the exact name, then an alias of the name, then an alias of `raw`. Aliases
+  never widen the allowlist; they only point at an entry that is already allowed.
+- `mode: "free"` runs the `raw` text as a temporary `.ps1`. It requires the agent config
+  to say `free` **and** the app's "Allow raw PowerShell" switch; either alone is not
+  enough.
+- Arguments are never interpolated into a command line. They are passed as environment
+  variables (`JARVIS_ARG_<UPPER_NAME>`) plus `JARVIS_ARGS_JSON`, so spaces and quotes
+  cannot break out into PowerShell syntax.
+- Undeclared arguments and missing `required` arguments are rejected with 400 rather
+  than silently ignored.
+- Output is capped at 40,000 characters per stream; the full command is killed on
+  timeout with `taskkill /T`.
+- A non-zero exit code is reported as a failure even though HTTP returned 200.
+
+### 10.4 What the app guarantees
+
+- No command leaves the phone unless **Laptop control** is on and both the address and
+  token are set.
+- `laptopAskBeforeRun` defaults to **true**: the exact command, and the agent's `preview`
+  of the script, are shown in a dialog before anything is sent.
+- A destructive-looking command (delete, format, shutdown, `iex`, registry, firewall,
+  diskpart, ...) gets an extra warning in the same dialog.
+- Errors keep the real cause: refused, timeout, 401, 403, 404, `exit N`, stderr.
+- The token is never logged, never sent to n8n and never bundled in the APK.
+- The last 40 runs are kept locally in `bonjee_laptop` for convenience only.
+
+### 10.5 Verification status
+
+The agent was run on this workstation and exercised over loopback on 2026-10-27:
+`/ping`, `/health`, `whoami`, `uptime`, an argument with a space, unknown command (403),
+missing/undeclared argument (400), invalid JSON (400), raw PowerShell refused in
+allowlist mode (403), free mode accepted, non-zero exit reported, and the timeout kill.
+The phone side has not been run on a device (no phone/adb available).

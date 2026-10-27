@@ -11,11 +11,16 @@ import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.bonjee.notifier.ai.AiClient
 import com.bonjee.notifier.databinding.ActivityAskBinding
 import com.bonjee.notifier.device.DeviceActions
+import com.bonjee.notifier.laptop.LaptopClient
+import com.bonjee.notifier.laptop.LaptopCommand
+import com.bonjee.notifier.laptop.LaptopHistoryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -23,14 +28,17 @@ import org.json.JSONObject
 import java.util.Locale
 
 /**
- * Asks the n8n assistant a question and shows the grounded answer/evidence.
- * Uses the same endpoint exposed by the Bonjee n8n workflow.
+ * The assistant.
  *
- * When launched from the Android assistant role (see
- * [com.bonjee.notifier.assistant.BonjeeVoiceInteractionSession]) the activity
- * opens the microphone immediately, sends the recognised text to the same
- * endpoint the app has always used, and reads the answer out loud. Nothing about
- * the backend, the endpoint configuration or the stored conversation changes.
+ * Order for every sentence:
+ *  1. [DeviceActions] - phone commands, answered offline;
+ *  2. a laptop command when it is addressed to the computer ("on my laptop ..."),
+ *     shown in full and approved before it runs;
+ *  3. the user's own AI provider, when configured;
+ *  4. the n8n archive, which is also the fallback when AI is off or fails.
+ *
+ * Steps 3 and 4 report the real HTTP outcome. Nothing here pretends an answer
+ * came from a service that did not respond.
  */
 class AskActivity : AppCompatActivity() {
 
@@ -58,6 +66,12 @@ class AskActivity : AppCompatActivity() {
 
     /** Permissions the user has already refused in this session. */
     private val deniedPermissions = mutableSetOf<String>()
+
+    /** Rolling AI context, oldest first. Never persisted; cleared with the activity. */
+    private val aiHistory = ArrayDeque<AiClient.Message>()
+
+    /** One laptop command at a time, so a double tap cannot send twice. */
+    private var laptopBusy = false
 
     /**
      * Runtime permission result for a device command ("call mum" needs contacts).
@@ -251,9 +265,9 @@ class AskActivity : AppCompatActivity() {
      *
      * Every sentence is offered to [DeviceActions] before the network. A match runs
      * on the phone (open an app, change brightness/volume, torch, alarm, call...)
-     * and answers immediately, even offline. Anything unrecognised is declared
-     * NotHandled and continues to the n8n workflow exactly as it always did, so the
-     * archived-question behaviour is unchanged.
+     * and answers immediately, even offline. Anything unrecognised goes to
+     * [routeBeyondDevice]: laptop command, then AI, then the n8n archive exactly as it
+     * always did, so the archived-question behaviour is unchanged.
      */
     private fun submit(question: String) {
         val outcome = try {
@@ -293,7 +307,7 @@ class AskActivity : AppCompatActivity() {
                 settingsShownOnce = false
                 present(outcome.message)
             }
-            DeviceActions.Result.NotHandled -> askBackend(question)
+            DeviceActions.Result.NotHandled -> routeBeyondDevice(question)
         }
     }
 
@@ -366,10 +380,10 @@ class AskActivity : AppCompatActivity() {
         }
     }
 
-    private fun askBackend(question: String) {
+    private fun askBackend(question: String, prefix: String = "") {
         settingsShownOnce = false
         binding.btnAsk.isEnabled = false
-        binding.txtAnswer.text = "Thinking..."
+        binding.txtAnswer.text = if (prefix.isBlank()) "Thinking..." else prefix + "Thinking..."
 
         lifecycleScope.launch {
             val payload = JSONObject().apply { put("question", question) }.toString()
@@ -379,10 +393,11 @@ class AskActivity : AppCompatActivity() {
             binding.btnAsk.isEnabled = true
             if (result.ok) {
                 val answer = extractAnswer(result.body)
-                binding.txtAnswer.text = answer
+                binding.txtAnswer.text = if (prefix.isBlank()) answer else prefix + answer
                 speak(answer)
             } else {
                 binding.txtAnswer.text = buildString {
+                    if (prefix.isNotBlank()) append(prefix)
                     append("Could not reach the assistant.\n\n")
                     append("Endpoint: ${prefs.askUrl()}\n")
                     append("${result.summary}\n\n")
@@ -397,6 +412,140 @@ class AskActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // ------------------------------------------------------- laptop and AI
+
+    /**
+     * Everything the phone itself cannot do.
+     *
+     * A sentence addressed to the computer is never quietly sent to a cloud
+     * model: the explicit "on my laptop" phrasing is what routes it, so the two
+     * destinations can never be confused.
+     */
+    private fun routeBeyondDevice(question: String) {
+        val laptopPart = LaptopCommand.stripPrefix(question)
+        if (laptopPart != null) {
+            runLaptop(laptopPart)
+            return
+        }
+        answerQuestion(question)
+    }
+
+    private fun runLaptop(inner: String) {
+        val parsed = LaptopCommand.parse(inner)
+        if (parsed.name.isBlank()) {
+            present("I heard a laptop command but it was empty. Try \"on my laptop notepad\".")
+            return
+        }
+        if (!prefs.laptopEnabled) {
+            present(
+                "Laptop control is switched off.\n\n" +
+                    "Open Automations > Laptop Control, enter the laptop's address and the " +
+                    "token from config.json, then turn it on. Nothing was sent.",
+            )
+            return
+        }
+        if (!prefs.laptopConfigured()) {
+            present(
+                "Laptop control needs the laptop's address and token.\n\n" +
+                    "Open Automations > Laptop Control and tap TEST. Nothing was sent.",
+            )
+            return
+        }
+        if (prefs.laptopAskBeforeRun) {
+            confirmLaptop(parsed) { executeLaptop(parsed) }
+        } else {
+            executeLaptop(parsed)
+        }
+    }
+
+    private fun confirmLaptop(parsed: LaptopCommand.Parsed, onApprove: () -> Unit) {
+        val message = buildString {
+            appendLine("This will run on your laptop:")
+            appendLine()
+            appendLine("  " + LaptopCommand.format(parsed))
+            if (LaptopCommand.isDangerous(parsed)) {
+                appendLine()
+                append("WARNING: this looks destructive. Read it again before approving.")
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Approve this laptop command?")
+            .setMessage(message.trim())
+            .setPositiveButton("Approve & run") { _, _ -> onApprove() }
+            .setNegativeButton("Cancel") { _, _ ->
+                binding.txtAnswer.text = "Cancelled. Nothing was sent to the laptop."
+            }
+            .setCancelable(true)
+            .show()
+    }
+
+    private fun executeLaptop(parsed: LaptopCommand.Parsed) {
+        if (laptopBusy) return
+        laptopBusy = true
+        binding.btnAsk.isEnabled = false
+        binding.txtAnswer.text = buildString {
+            appendLine("Running on the laptop:")
+            appendLine()
+            append(LaptopCommand.format(parsed))
+        }
+
+        val client = LaptopClient(this)
+        lifecycleScope.launch {
+            val run = withContext(Dispatchers.IO) { client.execute(parsed) }
+            laptopBusy = false
+            binding.btnAsk.isEnabled = true
+            LaptopHistoryStore(this@AskActivity).add(LaptopHistoryStore.from(run))
+            binding.txtAnswer.text = buildString {
+                appendLine(run.summary())
+                appendLine()
+                append("request " + run.requestId.take(8))
+            }
+            speak(if (run.ok) "Done on the laptop." else "The laptop command did not succeed.")
+        }
+    }
+
+    /**
+     * Asks the user's LLM. When it fails, the archive is still tried, and the
+     * final text says both what failed and where the answer came from.
+     */
+    private fun answerQuestion(question: String) {
+        if (!prefs.aiConfigured()) {
+            askBackend(question)
+            return
+        }
+        val client = AiClient(this)
+        binding.btnAsk.isEnabled = false
+        binding.txtAnswer.text = "Asking ${prefs.aiModel} ..."
+
+        lifecycleScope.launch {
+            val messages = aiHistory.toList() + AiClient.Message("user", question)
+            val answer = withContext(Dispatchers.IO) { client.chat(messages) }
+            if (answer.ok) {
+                binding.btnAsk.isEnabled = true
+                rememberTurn(question, answer.text)
+                prefs.aiLastOkAt = System.currentTimeMillis()
+                binding.txtAnswer.text = buildString {
+                    appendLine(answer.text)
+                    appendLine()
+                    append("— " + answer.sourceLine())
+                }
+                speak(answer.text)
+            } else {
+                askBackend(
+                    question,
+                    prefix = "AI could not answer.\n${answer.error}\n\n" +
+                        "Trying the n8n archive instead.\n\n",
+                )
+            }
+        }
+    }
+
+    private fun rememberTurn(question: String, answer: String) {
+        aiHistory.addLast(AiClient.Message("user", question))
+        aiHistory.addLast(AiClient.Message("assistant", answer.take(2000)))
+        while (aiHistory.size > AiClient.MAX_TURNS * 2) aiHistory.removeFirst()
     }
 
     /**

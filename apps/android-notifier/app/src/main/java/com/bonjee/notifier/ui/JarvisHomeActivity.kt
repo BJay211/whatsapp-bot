@@ -234,6 +234,12 @@ class JarvisHomeActivity : AppCompatActivity() {
                 R.id.nav_automations -> {
                     startActivity(Intent(this, AutomationsActivity::class.java))
                 }
+                R.id.nav_laptop -> {
+                    startActivity(Intent(this, LaptopActivity::class.java))
+                }
+                R.id.nav_ai -> {
+                    startActivity(Intent(this, AiSettingsActivity::class.java))
+                }
                 R.id.nav_devices -> {
                     startActivity(Intent(this, MessageSettingsActivity::class.java))
                 }

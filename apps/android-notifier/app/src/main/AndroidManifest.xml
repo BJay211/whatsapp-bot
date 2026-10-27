@@ -101,6 +101,18 @@
             android:label="Calendar" />
 
         <activity
+            android:name=".ui.LaptopActivity"
+            android:exported="false"
+            android:label="Laptop Control"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.AiSettingsActivity"
+            android:exported="false"
+            android:label="AI Assistant"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".ui.PermissionsActivity"
             android:exported="false"
             android:label="Access Control" />

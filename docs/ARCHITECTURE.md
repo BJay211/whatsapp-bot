@@ -28,6 +28,8 @@ graph TD
 | Postgres | Source of truth for messages, notifications, summaries, and state | Render Managed Postgres |
 | Android Notifier App | Uses `NotificationListenerService` to grab all notifications and POST them to n8n | Sideloaded APK onto your Android device |
 | Next.js Dashboard | View latest brief, deadlines, action items, timeline, and settings | Render Web Service/Static Site | 
+| Laptop agent (`laptop-agent/`) | Runs named commands on your own computer when the phone asks | Your PC, same Wi-Fi |
+| AI provider (Groq by default) | Answers general questions with your own key and model | Third-party HTTPS API |
 
 ## Phone Commands (offline)
 
@@ -92,6 +94,54 @@ first step is not a device action, the original sentence goes to the workflow un
 
 `WebModuleActivity` still exists but no drawer route uses it: the Next.js dashboard is
 not deployed, so pointing the menu at it only produced a dead WebView.
+
+## Laptop control (direct LAN, no cloud)
+
+A second, independent channel lets the phone run a named command on the user's own
+computer. It deliberately does not use n8n: the workflow currently returns 404, and
+laptop control has to work regardless.
+
+```
+AskActivity / LaptopActivity
+  └─ laptop/LaptopCommand      pure Kotlin: is this sentence for the computer?
+       ├─ stripPrefix / stripSuffix  "on my laptop ...", "laptop: ...", "... on my pc"
+       └─ parse / format / tokenize  name + key=value args, quotes honoured
+  └─ approval dialog (default on)  exact command + the agent's own preview
+  └─ laptop/LaptopClient       HTTP to the agent, honest error mapping
+       ├─ GET  /ping            discovery, unauthenticated
+       ├─ GET  /health          mode + allowlist, token
+       └─ POST /execute         one command, token
+            ↓ same Wi-Fi
+       laptop-agent/agent.ps1   TcpListener (no URL ACL), token, allowlist
+            └─ child PowerShell process, args as environment variables
+```
+
+`laptop/LaptopDiscovery.kt` scans the phone's own /24 for `/ping` answers whose name
+contains "jarvis". `laptop/LaptopHistoryStore.kt` keeps the last 40 runs in
+`bonjee_laptop`. The agent, its config format and the wire protocol are documented in
+`laptop-agent/README.md` and `docs/API_CONTRACT.md` section 10.
+
+Safety is layered: the app is off by default, the address and token must be set, the
+agent is in allowlist mode by default, and the app asks for approval by default. Raw
+PowerShell needs both sides to opt in.
+
+## Direct AI answers
+
+`ai/AiClient.kt` talks to any OpenAI-compatible `/chat/completions` endpoint. Groq is
+the default (`https://api.groq.com/openai/v1`, `llama-3.3-70b-versatile`) but the base
+URL and model are fields, so OpenAI, OpenRouter or a local Ollama work unchanged.
+
+`AskActivity` routes each sentence in this order:
+
+1. `DeviceActions` (phone commands, offline);
+2. a laptop command when the sentence is explicitly addressed to the computer;
+3. the user's LLM, when enabled with a key;
+4. the n8n archive, which is also the fallback when AI is off or fails.
+
+AI failures are shown with the provider's real status and message, then the archive is
+tried, and the final text names both. The system prompt forbids pretending to control
+the phone or laptop. The key lives in the app's private preferences, is sent only to the
+configured base URL, and is never logged or included in the APK.
 
 ## Summoning the assistant
 
@@ -198,6 +248,11 @@ needed:
 | :-- | :-- | :-- |
 | `bonjee_whatsapp` | `contact_rules_v1` | Contact rules as a JSON array, E.164 keys |
 | `bonjee_whatsapp` | `messages_v1` | Last 300 message/draft records |
+| `bonjee_laptop` | `history_v1` | Last 40 laptop runs (command, exit code, request id) |
+
+Laptop connection settings and the AI provider settings live in the main prefs. The AI
+key is stored in plain text in app-private storage; it is never logged and never leaves
+the phone except to the provider the user configured.
 
 Server-authorised auto-reply numbers live in the main prefs and are written only from a
 backend response - a local toggle alone is never authorisation.
@@ -220,6 +275,12 @@ To prevent spam, we use a `context_state` table with `last_summary_at`, `debounc
 - All webhooks from your phone should be sent over HTTPS
 - Use strong credentials for n8n, Postgres, and Evolution API
 - Consider putting n8n behind basic auth or IP restrictions if needed
-- The Android app only needs to hit your n8n webhook, no other external endpoints
-- All data stays within your Render services + DB
+- The Android app talks to three places, each configured by you and off by default:
+  your n8n base URL over HTTPS, an AI provider you choose (HTTPS, your key), and the
+  laptop agent on your own LAN (HTTP + token).
+- The laptop agent binds to every interface so the phone can reach it. Do not port-forward
+  it, and do not run it on public Wi-Fi. Use a private overlay such as Tailscale if the
+  phone and laptop are not on the same network.
+- Prefer `allowlist` mode over `free` mode; the agent refuses unknown commands there.
+- All data otherwise stays within your Render services + DB.
 - RLS should be enabled for the dashboard if you add auth

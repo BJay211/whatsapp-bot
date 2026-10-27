@@ -102,6 +102,15 @@ shows sample data instead of failing.
 
 See [`apps/android-notifier/README.md`](./apps/android-notifier/README.md).
 
+3.3 adds two optional features, both off until you set them up:
+
+- **Laptop control** - run `laptop-agent/start-agent.ps1` on your computer, then paste
+  the printed address and token into **Automations → Laptop Control**. Commands are
+  approved before they run. See [`laptop-agent/README.md`](./laptop-agent/README.md).
+- **AI answers** - put a Groq (or any OpenAI-compatible) API key and model into
+  **Automations → AI Assistant**. General questions then go straight to that provider
+  instead of n8n; if it fails, the app shows why and falls back to the archive.
+
 ```powershell
 cd "apps\android-notifier"
 powershell -ExecutionPolicy Bypass -File setup-toolchain.ps1   # one time

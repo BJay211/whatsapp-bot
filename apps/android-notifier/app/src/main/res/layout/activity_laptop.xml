@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:letterSpacing="0.15"
+        android:text="LAPTOP CONTROL"
+        android:textColor="@color/cyan"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:alpha="0.8"
+        android:text="Send a command from this phone to the agent on your computer. Same Wi-Fi required. Nothing runs until you approve it."
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/txtLaptopStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="monospace"
+        android:textColor="@color/text_tertiary"
+        android:textSize="10sp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border_cyan"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/JarvisSection"
+                        android:layout_marginTop="0dp"
+                        android:text="CONNECTION" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchLaptopEnabled"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Let JARVIS send commands to my laptop"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <EditText
+                        android:id="@+id/editLaptopHost"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:background="@color/bg_card_alt"
+                        android:hint="Laptop IP, e.g. 192.168.1.20"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:padding="9dp"
+                        android:textColor="@color/text_primary"
+                        android:textColorHint="@color/text_dim"
+                        android:textSize="12sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <EditText
+                            android:id="@+id/editLaptopPort"
+                            android:layout_width="90dp"
+                            android:layout_height="wrap_content"
+                            android:background="@color/bg_card_alt"
+                            android:hint="Port"
+                            android:inputType="number"
+                            android:maxLines="1"
+                            android:padding="9dp"
+                            android:textColor="@color/text_primary"
+                            android:textColorHint="@color/text_dim"
+                            android:textSize="12sp" />
+
+                        <EditText
+                            android:id="@+id/editLaptopToken"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:background="@color/bg_card_alt"
+                            android:hint="Token from config.json"
+                            android:inputType="textPassword"
+                            android:maxLines="1"
+                            android:padding="9dp"
+                            android:textColor="@color/text_primary"
+                            android:textColorHint="@color/text_dim"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnLaptopSave"
+                            style="@style/JarvisButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="SAVE"
+                            android:textColor="@color/black"
+                            app:backgroundTint="@color/cyan" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnLaptopTest"
+                            style="@style/JarvisButton.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:text="TEST" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLaptopDiscover"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="FIND MY LAPTOP ON THIS WI-FI" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border_orange"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/JarvisSection"
+                        android:layout_marginTop="0dp"
+                        android:text="SAFETY" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchAskBeforeRun"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Always show the command and ask me first"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchFreeMode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Allow raw PowerShell (agent must also allow it)"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/txtFreeWarning"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:alpha="0.9"
+                        android:textColor="@color/orange_bright"
+                        android:textSize="10sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border_cyan"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/JarvisSection"
+                        android:layout_marginTop="0dp"
+                        android:text="RUN A COMMAND" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <EditText
+                            android:id="@+id/editLaptopCommand"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:background="@color/bg_card_alt"
+                            android:hint="notepad   or   open_app app=&quot;visual studio code&quot;"
+                            android:inputType="text"
+                            android:maxLines="1"
+                            android:padding="9dp"
+                            android:textColor="@color/text_primary"
+                            android:textColorHint="@color/text_dim"
+                            android:textSize="12sp" />
+
+                        <ImageButton
+                            android:id="@+id/btnLaptopMic"
+                            android:layout_width="44dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="4dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Speak a laptop command"
+                            android:src="@android:drawable/ic_btn_speak_now"
+                            android:tint="@color/cyan" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnLaptopRun"
+                            style="@style/JarvisButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="RUN"
+                            android:textColor="@color/black"
+                            app:backgroundTint="@color/cyan" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnLaptopCommands"
+                            style="@style/JarvisButton.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:text="WHAT CAN IT RUN?" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/txtLaptopResult"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:textIsSelectable="true"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/JarvisSection"
+                        android:layout_marginTop="0dp"
+                        android:text="RECENT" />
+
+                    <TextView
+                        android:id="@+id/txtLaptopHistory"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="10sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLaptopClearHistory"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="CLEAR HISTORY" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:id="@+id/txtLaptopFooter"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:alpha="0.75"
+                android:paddingBottom="12dp"
+                android:textColor="@color/text_dim"
+                android:textSize="9sp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

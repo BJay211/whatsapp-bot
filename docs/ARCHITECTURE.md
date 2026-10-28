@@ -29,6 +29,7 @@ graph TD
 | Android Notifier App | Uses `NotificationListenerService` to grab all notifications and POST them to n8n | Sideloaded APK onto your Android device |
 | Next.js Dashboard | View latest brief, deadlines, action items, timeline, and settings | Render Web Service/Static Site | 
 | Laptop agent (`laptop-agent/`) | Runs named commands on your own computer when the phone asks | Your PC, same Wi-Fi |
+| Friday (`apps/friday`) | Native Windows assistant: voice, tools, files/apps, encrypted phone link | Your PC, same Wi-Fi |
 | AI provider (Groq by default) | Answers general questions with your own key and model | Third-party HTTPS API |
 
 ## Phone Commands (offline)
@@ -125,6 +126,56 @@ Safety is layered: the app is off by default, the address and token must be set,
 agent is in allowlist mode by default, and the app asks for approval by default. Raw
 PowerShell needs both sides to opt in.
 
+## Friday (laptop assistant, 3.4)
+
+Friday is the second laptop channel and the one that is meant to last. The older
+`laptop-agent/` remains for compatibility, but Friday is a real agent rather than a
+command relay: it owns the microphone, speakers, files and applications, keeps its own
+task queue, and can answer locally with no network and no key.
+
+```
+JARVIS 3.4 (phone)
+  ├─ FridayClient          pinned TLS, per-device token, protocol 1.0
+  │    ├─ GET  /v1/ping              unauthenticated discovery + fingerprint
+  │    ├─ POST /v1/pair              eight-character single-use code
+  │    ├─ POST /v1/command           natural language; 200 result or 202 + task id
+  │    ├─ GET  /v1/tasks/{id}        state, progress, result, approval id
+  │    ├─ POST /v1/approvals/{id}    approve or deny (expires in 180 s)
+  │    ├─ POST /v1/tasks/{id}/cancel
+  │    ├─ POST /v1/stop              emergency stop (423 while engaged)
+  │    └─ POST /v1/devices/revoke
+  └─ AskActivity routing: wake word ("Friday, ...") or an explicit laptop reference
+       ↓ same Wi-Fi, TLS 1.2/1.3
+  friday.exe :8790
+       ├─ FridayServer        request validation, idempotency, rate limit, keep-alive
+       ├─ TaskQueue           single worker, approvals, cancellation, event-driven waits
+       ├─ Orchestrator        local intents first, then an OpenAI-compatible model
+       │    └─ ToolRegistry   capability + risk gate on every call
+       ├─ VoiceEngine         System.Speech in and out, push-to-talk, optional wake word
+       └─ MainForm            animated core, transcript, task progress, approval card
+```
+
+Design points that matter:
+
+- **The model cannot act directly.** It returns tool calls; the registry re-checks each
+  one against the same policy a typed command uses, and the person sees an approval card
+  for anything `Confirm` or `Destructive`.
+- **Long work leaves the HTTP request.** `/v1/command` waits briefly and then answers
+  `202` with a task id. The phone polls that id; a dropped connection does not cancel
+  the task.
+- **Idempotency is mandatory.** The same `request_id` never runs twice, which is what
+  makes a flaky link safe.
+- **One TLS session per polling run.** The server keeps HTTP/1.1 connections open, so a
+  phone poll does not pay for a handshake every time. See `docs/FRIDAY_TESTING.md` for the
+  measured effect.
+- **Two assistant identities coexist.** Sentences starting with "on my laptop ..." still
+  belong to `laptop-agent/` while it is configured; sentences addressed to Friday (wake
+  word or "on the pc" style references) go to Friday. Everything else is unchanged
+  JARVIS: phone commands, AI, then the n8n archive.
+
+Protocol, setup, security and test evidence are in `docs/FRIDAY_API.md`,
+`docs/FRIDAY_SETUP.md`, `docs/FRIDAY_SECURITY.md` and `docs/FRIDAY_TESTING.md`.
+
 ## Direct AI answers
 
 `ai/AiClient.kt` talks to any OpenAI-compatible `/chat/completions` endpoint. Groq is
@@ -134,9 +185,12 @@ URL and model are fields, so OpenAI, OpenRouter or a local Ollama work unchanged
 `AskActivity` routes each sentence in this order:
 
 1. `DeviceActions` (phone commands, offline);
-2. a laptop command when the sentence is explicitly addressed to the computer;
-3. the user's LLM, when enabled with a key;
-4. the n8n archive, which is also the fallback when AI is off or fails.
+2. Friday, when the sentence starts with the configured wake word ("Friday, ...")
+   or explicitly names the laptop, and Friday is paired;
+3. the older laptop agent, when the sentence starts with "on my laptop ..." and
+   that agent is configured (otherwise it also goes to Friday);
+4. the user's LLM, when enabled with a key;
+5. the n8n archive, which is also the fallback when AI is off or fails.
 
 AI failures are shown with the provider's real status and message, then the archive is
 tried, and the final text names both. The system prompt forbids pretending to control
@@ -281,6 +335,11 @@ To prevent spam, we use a `context_state` table with `last_summary_at`, `debounc
 - The laptop agent binds to every interface so the phone can reach it. Do not port-forward
   it, and do not run it on public Wi-Fi. Use a private overlay such as Tailscale if the
   phone and laptop are not on the same network.
+- Friday's link is TLS with a self-signed certificate that the phone pins by SHA-256,
+  plus a per-device token stored only as a hash on the laptop. Turning TLS off is an
+  explicit downgrade; regenerating the certificate invalidates every pairing. It binds to
+  the local network by default, has no public endpoint, and must not be port-forwarded.
+  Details and residual risks: `docs/FRIDAY_SECURITY.md`.
 - Prefer `allowlist` mode over `free` mode; the agent refuses unknown commands there.
 - All data otherwise stays within your Render services + DB.
 - RLS should be enabled for the dashboard if you add auth

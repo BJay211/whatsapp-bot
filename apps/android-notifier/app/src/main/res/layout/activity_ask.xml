@@ -19,7 +19,7 @@
         android:layout_marginTop="4dp"
         android:layout_marginBottom="12dp"
         android:alpha="0.7"
-        android:text="Commands run on the phone: apps, calls, brightness, volume, alarms. Add &quot;on my laptop&quot; to send one to your computer. Questions go to your AI if set up, otherwise to your archive." />
+        android:text="Commands run on the phone: apps, calls, brightness, volume, alarms. Say &quot;Friday, ...&quot; to use the assistant on your laptop, or add &quot;on my laptop&quot; for the older laptop agent. Questions go to your AI if set up, otherwise to your archive." />
 
     <com.google.android.material.textfield.TextInputLayout
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
@@ -67,6 +67,14 @@
             android:layout_weight="1"
             android:text="Back" />
     </LinearLayout>
+
+    <Button
+        android:id="@+id/btnCancel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Cancel task on laptop"
+        android:visibility="gone" />
 
     <ScrollView
         android:layout_width="match_parent"

@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -18,24 +19,29 @@ import androidx.lifecycle.lifecycleScope
 import com.bonjee.notifier.ai.AiClient
 import com.bonjee.notifier.databinding.ActivityAskBinding
 import com.bonjee.notifier.device.DeviceActions
+import com.bonjee.notifier.friday.FridayClient
 import com.bonjee.notifier.laptop.LaptopClient
 import com.bonjee.notifier.laptop.LaptopCommand
 import com.bonjee.notifier.laptop.LaptopHistoryStore
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.Locale
+import java.util.UUID
 
 /**
  * The assistant.
  *
  * Order for every sentence:
  *  1. [DeviceActions] - phone commands, answered offline;
- *  2. a laptop command when it is addressed to the computer ("on my laptop ..."),
- *     shown in full and approved before it runs;
- *  3. the user's own AI provider, when configured;
- *  4. the n8n archive, which is also the fallback when AI is off or fails.
+ *  2. Friday, when the sentence is addressed to it ("friday ...") or clearly
+ *     names the laptop, and Friday is paired;
+ *  3. the older laptop agent ("on my laptop ..."), kept for compatibility;
+ *  4. the user's own AI provider, when configured;
+ *  5. the n8n archive, which is also the fallback when AI is off or fails.
  *
  * Steps 3 and 4 report the real HTTP outcome. Nothing here pretends an answer
  * came from a service that did not respond.
@@ -72,6 +78,13 @@ class AskActivity : AppCompatActivity() {
 
     /** One laptop command at a time, so a double tap cannot send twice. */
     private var laptopBusy = false
+
+    /** One Friday task at a time; the id is also the handle for Cancel. */
+    private var fridayBusy = false
+    private var fridayTaskId: String? = null
+
+    /** Approval prompts already shown, so polling never nags in a loop. */
+    private val fridayAskedApprovals = mutableSetOf<String>()
 
     /**
      * Runtime permission result for a device command ("call mum" needs contacts).
@@ -179,6 +192,7 @@ class AskActivity : AppCompatActivity() {
         binding.btnAsk.setOnClickListener { ask() }
         binding.btnMic.setOnClickListener { startVoiceInput() }
         binding.btnBack.setOnClickListener { finish() }
+        binding.btnCancel.setOnClickListener { cancelFridayTask() }
 
         if (fromAssistant) {
             binding.txtAnswer.text = "Listening..."
@@ -420,16 +434,305 @@ class AskActivity : AppCompatActivity() {
      * Everything the phone itself cannot do.
      *
      * A sentence addressed to the computer is never quietly sent to a cloud
-     * model: the explicit "on my laptop" phrasing is what routes it, so the two
-     * destinations can never be confused.
+     * model. The explicit word ("friday ...") is what routes it; otherwise the
+     * older laptop agent keeps its own "on my laptop ..." prefix, and everything
+     * else stays a normal question.
      */
     private fun routeBeyondDevice(question: String) {
+        val fridayPart = fridayInstruction(question)
+        if (fridayPart != null) {
+            runFriday(fridayPart)
+            return
+        }
         val laptopPart = LaptopCommand.stripPrefix(question)
         if (laptopPart != null) {
-            runLaptop(laptopPart)
+            // The older agent keeps its own prefix while it is configured. If it
+            // is not, the same sentence goes to Friday instead of dead-ending in
+            // a "not set up" message.
+            val oldAgentReady = prefs.laptopEnabled && prefs.laptopConfigured()
+            if (!oldAgentReady && prefs.fridayEnabled && prefs.fridayConfigured()) {
+                runFriday(laptopPart)
+            } else {
+                runLaptop(laptopPart)
+            }
             return
         }
         answerQuestion(question)
+    }
+
+    // ---------------------------------------------------------------- Friday
+
+    /**
+     * Returns the instruction when [question] is addressed to Friday, or null
+     * when it is an ordinary question.
+     *
+     * Two ways in, both explicit enough to be predictable:
+     *  - the configured word ("friday", "hey friday", "ok friday"), and
+     *  - a sentence that names the laptop while asking for something on it.
+     * There is no guessing based on topic alone, so "what is my battery" stays a
+     * normal question while "what is my laptop's battery" goes to Friday.
+     */
+    private fun fridayInstruction(question: String): String? {
+        val text = question.trim()
+        if (text.isEmpty()) return null
+        val lower = text.lowercase(Locale.getDefault())
+
+        val prefix = prefs.fridayInvokePrefix.trim().lowercase(Locale.getDefault())
+        if (prefix.isNotEmpty()) {
+            for (form in listOf(prefix, "hey $prefix", "ok $prefix", "okay $prefix")) {
+                if (lower == form) return ""
+                if (lower.startsWith("$form ") || lower.startsWith("$form,") ||
+                    lower.startsWith("$form:") || lower.startsWith("$form-")
+                ) {
+                    return text.substring(form.length)
+                        .trimStart(' ', ',', ':', '-', '.')
+                        .trim()
+                }
+            }
+        }
+
+        if (!prefs.fridayConfigured()) return null
+        val namesLaptop = lower.contains("laptop") || lower.contains("computer") ||
+            lower.contains("pc ") || lower.endsWith(" pc") || lower.contains("desktop")
+        if (!namesLaptop) return null
+
+        val wantsSomething = LAPTOP_ACTION_WORDS.any { lower.contains(it) }
+        return if (wantsSomething) text else null
+    }
+
+    private fun runFriday(instruction: String) {
+        if (instruction.isBlank()) {
+            present("Yes? Tell me what to do on the laptop, for example \"Friday, open Spotify\".")
+            return
+        }
+        if (!prefs.fridayEnabled) {
+            present(
+                "Friday is switched off on this phone.\n\n" +
+                    "Open Friday in the app's settings, pair with the laptop and turn it on. " +
+                    "Nothing was sent.",
+            )
+            return
+        }
+        if (!prefs.fridayConfigured()) {
+            present(
+                "This phone is not paired with Friday yet.\n\n" +
+                    "On the laptop open Friday > Settings > Phone and generate a pairing code, " +
+                    "then enter it here. Nothing was sent.",
+            )
+            return
+        }
+        if (fridayBusy) {
+            present("I am already working on something on the laptop. Wait for it, or press Cancel.")
+            return
+        }
+
+        fridayBusy = true
+        fridayTaskId = null
+        binding.btnAsk.isEnabled = false
+        binding.btnCancel.isEnabled = true
+        binding.btnCancel.visibility = View.VISIBLE
+        binding.txtAnswer.text = "Sending to Friday...\n\n$instruction"
+        speak("Working on the laptop.")
+
+        // A stable id makes a retried send safe: Friday runs the instruction at
+        // most once and answers with the original task.
+        val requestId = "android-" + UUID.randomUUID()
+
+        lifecycleScope.launch {
+            try {
+                val client = FridayClient(this@AskActivity)
+                val sent = withContext(Dispatchers.IO) { client.command(instruction, requestId) }
+                val task = sent.value
+                if (!sent.ok || task == null) {
+                    binding.txtAnswer.text = sent.message.ifBlank {
+                        "Friday did not accept that instruction."
+                    }
+                    speak("I could not reach Friday.")
+                    return@launch
+                }
+                prefs.fridayLastOkAt = System.currentTimeMillis()
+                watchFriday(client, task)
+            } finally {
+                fridayBusy = false
+                fridayTaskId = null
+                if (!isFinishing && !isDestroyed) {
+                    binding.btnAsk.isEnabled = true
+                    binding.btnCancel.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    /**
+     * Follows one task to a terminal state. Long work is polled instead of
+     * holding a request open, and an approval is asked for exactly once.
+     */
+    private suspend fun watchFriday(client: FridayClient, initial: FridayClient.Task) {
+        var task = initial
+        val startedAt = System.currentTimeMillis()
+        val deadline = startedAt + 15 * 60 * 1000
+
+        while (true) {
+            if (isFinishing || isDestroyed) return
+            fridayTaskId = task.taskId
+            binding.txtAnswer.text = fridayProgressText(task)
+
+            val approval = task.approval
+            if (task.awaitingApproval && approval != null &&
+                fridayAskedApprovals.add(approval.id)
+            ) {
+                val answer = askFridayApproval(approval)
+                if (answer != null) {
+                    val (id, approved) = answer
+                    val result = withContext(Dispatchers.IO) {
+                        client.approve(id, approved, remember = false)
+                    }
+                    if (!result.ok) {
+                        // The laptop still owns the decision; say so instead of
+                        // pretending the approval was accepted.
+                        binding.txtAnswer.text = buildString {
+                            appendLine(result.message)
+                            appendLine()
+                            append("The task is still waiting. You can answer it on the laptop.")
+                        }
+                    }
+                } else {
+                    binding.txtAnswer.text = buildString {
+                        appendLine(fridayProgressText(task))
+                        appendLine()
+                        append("You dismissed the approval. Friday is still waiting on the laptop.")
+                    }
+                }
+            }
+
+            if (task.isTerminal) {
+                binding.txtAnswer.text = fridayProgressText(task)
+                speak(
+                    when (task.status) {
+                        FridayClient.STATUS_SUCCEEDED -> "Done on the laptop."
+                        FridayClient.STATUS_CANCELLED -> "Cancelled on the laptop."
+                        else -> "The laptop could not finish that."
+                    },
+                )
+                return
+            }
+
+            if (System.currentTimeMillis() > deadline) {
+                binding.txtAnswer.text = buildString {
+                    appendLine(fridayProgressText(task))
+                    appendLine()
+                    append(
+                        "I stopped watching after 15 minutes. The task may still be running " +
+                            "on the laptop - check Friday's window there.",
+                    )
+                }
+                return
+            }
+
+            // Fast polling for the first few seconds (that is when a short command
+            // finishes, and the answer should feel immediate), then a calmer 800 ms
+            // so a long task stays well inside Friday's 120-requests-per-minute
+            // budget for one phone.
+            val elapsed = System.currentTimeMillis() - startedAt
+            delay(if (elapsed < 10_000) 300 else 800)
+            val next = withContext(Dispatchers.IO) { client.task(task.taskId) }
+            if (!next.ok || next.value == null) {
+                binding.txtAnswer.text = buildString {
+                    appendLine("Lost contact with Friday while it was working.")
+                    appendLine()
+                    appendLine(next.message)
+                    appendLine()
+                    append(
+                        "The task may still be running on the laptop. It was not cancelled, " +
+                            "and it will not be sent twice.",
+                    )
+                }
+                speak("I lost contact with the laptop.")
+                return
+            }
+            task = next.value
+        }
+    }
+
+    private fun fridayProgressText(task: FridayClient.Task): String = buildString {
+        appendLine("On the laptop:")
+        if (task.instruction.isNotBlank()) appendLine(task.instruction)
+        appendLine()
+        appendLine("Status: ${fridayStatusLabel(task.status)}")
+        val detail = when (task.status) {
+            FridayClient.STATUS_SUCCEEDED, FridayClient.STATUS_FAILED, FridayClient.STATUS_CANCELLED ->
+                task.display()
+            else -> task.progress.ifBlank { task.summary }
+        }
+        if (detail.isNotBlank()) append(detail)
+        if (task.status == FridayClient.STATUS_AWAITING) {
+            appendLine()
+            append("Approve or deny it below, or on the laptop itself.")
+        }
+        if (task.taskId.isNotBlank()) {
+            appendLine()
+            append("task " + task.taskId.take(8))
+        }
+    }
+
+    private fun fridayStatusLabel(status: String): String = when (status) {
+        FridayClient.STATUS_RECEIVED -> "received"
+        FridayClient.STATUS_VALIDATING -> "checking"
+        FridayClient.STATUS_AWAITING -> "waiting for approval"
+        FridayClient.STATUS_RUNNING -> "working"
+        FridayClient.STATUS_SUCCEEDED -> "done"
+        FridayClient.STATUS_FAILED -> "failed"
+        FridayClient.STATUS_CANCELLED -> "cancelled"
+        else -> status.ifBlank { "unknown" }
+    }
+
+    /** Suspends until the user approves, denies, or dismisses. */
+    private suspend fun askFridayApproval(
+        approval: FridayClient.Approval,
+    ): Pair<String, Boolean>? {
+        val deferred = CompletableDeferred<Pair<String, Boolean>?>()
+        val message = buildString {
+            appendLine(approval.detail.ifBlank { approval.title })
+            appendLine()
+            append("Capability: ${approval.capability.ifBlank { "unknown" }}")
+            if (approval.destructive) {
+                appendLine()
+                appendLine()
+                append("WARNING: Friday marked this as destructive. Read it before approving.")
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle(
+                if (approval.destructive) "Approve a destructive action?"
+                else "Approve this on the laptop?",
+            )
+            .setMessage(message.trim())
+            .setPositiveButton("Approve") { _, _ -> deferred.complete(approval.id to true) }
+            .setNegativeButton("Deny") { _, _ -> deferred.complete(approval.id to false) }
+            .setOnCancelListener { deferred.complete(null) }
+            .show()
+        return deferred.await()
+    }
+
+    private fun cancelFridayTask() {
+        val id = fridayTaskId
+        if (id.isNullOrBlank()) {
+            Toast.makeText(this, "Nothing is running on the laptop.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        binding.btnCancel.isEnabled = false
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                FridayClient(this@AskActivity).cancel(id)
+            }
+            binding.btnCancel.isEnabled = true
+            binding.txtAnswer.text = buildString {
+                appendLine(result.message.ifBlank { "Cancel requested." })
+                appendLine()
+                append("task " + id.take(8))
+            }
+            if (result.ok) speak("Cancelled.")
+        }
     }
 
     private fun runLaptop(inner: String) {
@@ -603,6 +906,24 @@ class AskActivity : AppCompatActivity() {
         const val EXTRA_QUERY = "query"
 
         private const val UTTERANCE_ID = "bonjee-answer"
+
+        /**
+         * Words that mean "do something on the computer". Used together with an
+         * explicit mention of the laptop, so an ordinary question is never sent
+         * to the laptop just because it mentions one.
+         */
+        private val LAPTOP_ACTION_WORDS = listOf(
+            "open", "launch", "start", "run ", "close", "switch to", "focus",
+            "play", "pause", "resume", "stop", "next track", "previous track",
+            "volume", "mute", "unmute", "brightness", "screen", "screenshot",
+            "lock", "sleep", "shut down", "shutdown", "restart", "reboot",
+            "battery", "charging", "cpu", "memory", "ram", "disk", "storage",
+            "wifi", "wi-fi", "bluetooth", "install", "uninstall", "download",
+            "file", "folder", "document", "terminal", "command", "type ",
+            "click", "copy", "paste", "delete", "rename", "search", "find ",
+            "window", "app ", "notification", "music", "video", "project",
+            "build", "test", "status", "how much", "what's", "whats", "what is",
+        )
 
         private val ANSWER_KEYS = listOf("answer", "response", "text", "output", "message")
     }

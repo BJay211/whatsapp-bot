@@ -42,7 +42,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:textColor="@color/text_secondary"
-                android:text="Notification capture • n8n bridge • AI assistant"
+                android:text="Notification capture â€¢ n8n bridge â€¢ AI assistant"
                 android:textSize="13sp" />
         </LinearLayout>
 
@@ -345,7 +345,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    android:hint="Bonjee Dashboard URL"
+                    android:hint="JARVIS dashboard URL"
                     android:textColorHint="@color/text_tertiary"
                     app:boxStrokeColor="@color/cyan"
                     app:hintTextColor="@color/cyan"

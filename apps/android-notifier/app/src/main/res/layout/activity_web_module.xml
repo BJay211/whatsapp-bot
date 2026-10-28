@@ -29,7 +29,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:text="BONJEE OS"
+            android:text="JARVIS OS"
             android:textColor="@color/cyan"
             android:textSize="14sp"
             android:textStyle="bold"

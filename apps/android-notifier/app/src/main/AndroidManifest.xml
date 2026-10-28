@@ -107,6 +107,12 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ui.FridayActivity"
+            android:exported="false"
+            android:label="Friday"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".ui.AiSettingsActivity"
             android:exported="false"
             android:label="AI Assistant"
@@ -164,7 +170,7 @@
         <activity
             android:name=".ui.WebModuleActivity"
             android:exported="false"
-            android:label="Bonjee OS"
+            android:label="JARVIS OS"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.BonjeeNotifier" />
 

@@ -325,6 +325,104 @@ class Prefs private constructor(context: Context) {
         return if (hasPort) withScheme else "$withScheme:$laptopPort"
     }
 
+    // ------------------------------------------------- Friday (laptop assistant)
+
+    /**
+     * Master switch for the Friday connection. While it is off, nothing in the
+     * app will contact the laptop, even if the phone is paired.
+     */
+    var fridayEnabled: Boolean
+        get() = sp.getBoolean(KEY_FRIDAY_ENABLED, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_FRIDAY_ENABLED, value).apply()
+        }
+
+    var fridayHost: String
+        get() = sp.getString(KEY_FRIDAY_HOST, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_FRIDAY_HOST, value.trim()).apply()
+        }
+
+    var fridayPort: Int
+        get() = sp.getInt(KEY_FRIDAY_PORT, DEFAULT_FRIDAY_PORT)
+        set(value) {
+            val port = if (value in 1..65535) value else DEFAULT_FRIDAY_PORT
+            sp.edit().putInt(KEY_FRIDAY_PORT, port).apply()
+        }
+
+    /** The device token issued by Friday at pairing time. */
+    var fridayToken: String
+        get() = sp.getString(KEY_FRIDAY_TOKEN, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_FRIDAY_TOKEN, value.trim()).apply()
+        }
+
+    /** SHA-256 of Friday's TLS certificate, uppercase hex. Empty means unpinned. */
+    var fridayFingerprint: String
+        get() = sp.getString(KEY_FRIDAY_FINGERPRINT, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_FRIDAY_FINGERPRINT, value.replace(":", "").trim().uppercase()).apply()
+        }
+
+    var fridayDeviceId: String
+        get() = sp.getString(KEY_FRIDAY_DEVICE_ID, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_FRIDAY_DEVICE_ID, value.trim()).apply()
+        }
+
+    var fridayPairedAt: Long
+        get() = sp.getLong(KEY_FRIDAY_PAIRED_AT, 0L)
+        set(value) {
+            sp.edit().putLong(KEY_FRIDAY_PAIRED_AT, value).apply()
+        }
+
+    /**
+     * The word or phrase that addresses the laptop assistant. A sentence that
+     * does not start with it is still answered by JARVIS, so ordinary questions
+     * never reach the laptop.
+     */
+    var fridayInvokePrefix: String
+        get() = sp.getString(KEY_FRIDAY_PREFIX, DEFAULT_FRIDAY_PREFIX) ?: DEFAULT_FRIDAY_PREFIX
+        set(value) {
+            val clean = value.trim().lowercase().ifEmpty { DEFAULT_FRIDAY_PREFIX }
+            sp.edit().putString(KEY_FRIDAY_PREFIX, clean).apply()
+        }
+
+    var fridayLastOkAt: Long
+        get() = sp.getLong(KEY_FRIDAY_LAST_OK, 0L)
+        set(value) {
+            sp.edit().putLong(KEY_FRIDAY_LAST_OK, value).apply()
+        }
+
+    fun fridayConfigured(): Boolean = fridayHost.isNotBlank() && fridayToken.isNotBlank()
+
+    /**
+     * Always TLS unless the user typed an explicit scheme. Friday listens with a
+     * self-signed certificate, pinned by fingerprint, so plain http is only used
+     * when it was asked for on purpose.
+     */
+    fun fridayBaseUrl(): String {
+        val raw = fridayHost.trim().trimEnd('/')
+        if (raw.isEmpty()) return ""
+        val withScheme = when {
+            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+            else -> "https://$raw"
+        }
+        val hostPart = withScheme.substringAfter("://")
+        val hasPort = hostPart.contains(':') && !hostPart.substringAfter(':').contains('/')
+        return if (hasPort) withScheme else "$withScheme:$fridayPort"
+    }
+
+    /** Forgets this phone's token, pin and device id. The laptop keeps its record. */
+    fun clearFridayPairing() {
+        sp.edit()
+            .remove(KEY_FRIDAY_TOKEN)
+            .remove(KEY_FRIDAY_FINGERPRINT)
+            .remove(KEY_FRIDAY_DEVICE_ID)
+            .remove(KEY_FRIDAY_PAIRED_AT)
+            .apply()
+    }
+
     // ------------------------------------------------------------------- AI
 
     /** Let general questions go straight to the user's LLM instead of n8n. */
@@ -423,6 +521,15 @@ class Prefs private constructor(context: Context) {
         const val KEY_LAPTOP_APPROVE = "laptop_ask_before_run"
         const val KEY_LAPTOP_FREE = "laptop_free_mode"
         const val KEY_LAPTOP_LAST_SEEN = "laptop_last_seen"
+        const val KEY_FRIDAY_ENABLED = "friday_enabled"
+        const val KEY_FRIDAY_HOST = "friday_host"
+        const val KEY_FRIDAY_PORT = "friday_port"
+        const val KEY_FRIDAY_TOKEN = "friday_token"
+        const val KEY_FRIDAY_FINGERPRINT = "friday_fingerprint"
+        const val KEY_FRIDAY_DEVICE_ID = "friday_device_id"
+        const val KEY_FRIDAY_PAIRED_AT = "friday_paired_at"
+        const val KEY_FRIDAY_PREFIX = "friday_invoke_prefix"
+        const val KEY_FRIDAY_LAST_OK = "friday_last_ok"
         const val KEY_AI_ENABLED = "ai_enabled"
         const val KEY_AI_BASE = "ai_base_url"
         const val KEY_AI_KEY = "ai_api_key"
@@ -433,6 +540,8 @@ class Prefs private constructor(context: Context) {
         const val DEFAULT_APP_API_PATH = "/webhook/app-api"
         const val DEFAULT_AUTH_HEADER = "Authorization"
         const val DEFAULT_LAPTOP_PORT = 8787
+        const val DEFAULT_FRIDAY_PORT = 8790
+        const val DEFAULT_FRIDAY_PREFIX = "friday"
         const val DEFAULT_AI_BASE = "https://api.groq.com/openai/v1"
         const val DEFAULT_AI_MODEL = "llama-3.3-70b-versatile"
 

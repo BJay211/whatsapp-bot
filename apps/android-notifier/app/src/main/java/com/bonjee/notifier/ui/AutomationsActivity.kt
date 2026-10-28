@@ -138,6 +138,9 @@ class AutomationsActivity : AppCompatActivity() {
         binding.btnAutomationLaptop.setOnClickListener {
             startActivity(Intent(this, LaptopActivity::class.java))
         }
+        binding.btnAutomationFriday.setOnClickListener {
+            startActivity(Intent(this, FridayActivity::class.java))
+        }
     }
 
     private fun loadSwitches() {
@@ -252,6 +255,26 @@ class AutomationsActivity : AppCompatActivity() {
                     append(
                         SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
                             .format(Date(prefs.laptopLastSeenAt)),
+                    )
+                }
+            }
+        }
+
+        binding.txtFridayCardStatus.text = when {
+            !prefs.fridayEnabled ->
+                "Off. \"Friday, ...\" stays a normal question."
+            prefs.fridayHost.isBlank() ->
+                "On, but no laptop address is set."
+            !prefs.fridayConfigured() ->
+                "Address set, but this phone is not paired yet."
+            else -> buildString {
+                append(prefs.fridayBaseUrl())
+                append(" · paired")
+                if (prefs.fridayLastOkAt > 0) {
+                    append(" · last success ")
+                    append(
+                        SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
+                            .format(Date(prefs.fridayLastOkAt)),
                     )
                 }
             }

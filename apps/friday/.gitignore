@@ -1,0 +1,4 @@
+# Build output - recreated by `dotnet build` / `dotnet publish`
+bin/
+obj/
+dist/

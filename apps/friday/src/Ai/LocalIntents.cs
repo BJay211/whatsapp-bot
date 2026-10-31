@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Friday.Core;
 using Friday.Tools;
+using Friday.Voice;
 
 namespace Friday.Ai;
 
@@ -24,7 +25,7 @@ public static class LocalIntents
         var original = (text ?? "").Trim();
         if (original.Length == 0) return new LocalOutcome(false, false, "");
 
-        var cleaned = StripWakeWord(original);
+        var cleaned = StripWakeWord(original, ctx.Config.Voice.WakeWord);
         var lower = cleaned.ToLowerInvariant().Trim(' ', '.', '!', '?', ',');
 
         if (lower is "help" or "what can you do" or "what can i ask you" or "commands" or "show commands")
@@ -169,26 +170,14 @@ public static class LocalIntents
         }
 
         // ---- "open ..." family -------------------------------------------------
+        // One resolver decides app vs file vs folder. It always launches a full
+        // executable path, so "open chrome" cannot open a folder named chrome.
         var openMatch = Regex.Match(cleaned, @"^(?:please\s+)?(?:can you\s+)?(?:open|launch|start|run|switch to)\s+(?<target>.+)$",
             RegexOptions.IgnoreCase);
         if (openMatch.Success)
         {
             var target = openMatch.Groups["target"].Value.Trim().Trim('"');
-            target = Regex.Replace(target, @"^(?:the|my)\s+", "", RegexOptions.IgnoreCase);
-            target = Regex.Replace(target, @"\s+(?:app|application|window|please|for me)$", "", RegexOptions.IgnoreCase);
-
-            if (Regex.IsMatch(target, @"^(https?://|www\.)", RegexOptions.IgnoreCase))
-                return await Run(registry, "open_url", new JsonObject { ["url"] = target }, ctx);
-
-            var project = TryResolveProject(ctx, target);
-            if (project is not null) return await Run(registry, "open_path", new JsonObject { ["path"] = project }, ctx);
-
-            if (target.Contains('\\') || target.Contains('/') || target.StartsWith("~") ||
-                Regex.IsMatch(target, @"\.(txt|md|pdf|docx|xlsx|pptx|png|jpg|jpeg|zip|cs|kt|py|js|json|sln)$",
-                    RegexOptions.IgnoreCase))
-                return await Run(registry, "open_path", new JsonObject { ["path"] = target }, ctx);
-
-            return await Run(registry, "open_app", new JsonObject { ["name"] = target }, ctx);
+            return await Run(registry, "open_target", new JsonObject { ["target"] = target }, ctx);
         }
 
         // ---- window control ---------------------------------------------------
@@ -215,17 +204,23 @@ public static class LocalIntents
             @"^(?:find|search|look)\s+(?:for\s+)?(?:a\s+)?(?:file|files|folder)\s+(?:called\s+|named\s+)?(?<q>.+)$",
             RegexOptions.IgnoreCase);
         if (searchFileMatch.Success)
-            return await Run(registry, "search_files", new JsonObject { ["query"] = searchFileMatch.Groups["q"].Value.Trim() }, ctx);
+            return await Run(registry, "search_files",
+                new JsonObject { ["query"] = AppTools.NormaliseSpokenTarget(searchFileMatch.Groups["q"].Value) }, ctx);
 
         var whereMatch = Regex.Match(cleaned, @"^(?:where is|find)\s+(?<q>.+)$", RegexOptions.IgnoreCase);
         if (whereMatch.Success)
-            return await Run(registry, "search_files", new JsonObject { ["query"] = whereMatch.Groups["q"].Value.Trim() }, ctx);
+            return await Run(registry, "search_files",
+                new JsonObject { ["query"] = AppTools.NormaliseSpokenTarget(whereMatch.Groups["q"].Value) }, ctx);
 
         // ---- read a file ------------------------------------------------------
         var readMatch = Regex.Match(cleaned, @"^(?:read|open and read|show me)\s+(?:the\s+file\s+)?(?<p>.+)$",
             RegexOptions.IgnoreCase);
-        if (readMatch.Success && Regex.IsMatch(readMatch.Groups["p"].Value, @"\.(txt|md|docx|json|log)$", RegexOptions.IgnoreCase))
-            return await Run(registry, "read_file", new JsonObject { ["path"] = readMatch.Groups["p"].Value.Trim() }, ctx);
+        if (readMatch.Success)
+        {
+            var path = AppTools.NormaliseSpokenTarget(readMatch.Groups["p"].Value);
+            if (Regex.IsMatch(path, @"\.(txt|md|docx|json|log)$", RegexOptions.IgnoreCase))
+                return await Run(registry, "read_file", new JsonObject { ["path"] = path }, ctx);
+        }
 
         // ---- web search ------------------------------------------------------
         var webMatch = Regex.Match(cleaned,
@@ -262,11 +257,10 @@ public static class LocalIntents
         return CommandVerb.IsMatch(trimmed);
     }
 
-    public static string StripWakeWord(string text)
+    public static string StripWakeWord(string text, string? wakeWord = null)
     {
         var trimmed = (text ?? "").Trim();
-        var match = Regex.Match(trimmed, @"^(?:hey\s+)?friday\b[\s,.:;-]*(?<rest>.*)$", RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups["rest"].Value.Trim() : trimmed;
+        return WakeWord.TryExtract(trimmed, wakeWord ?? "friday", out var rest) ? rest : trimmed;
     }
 
     private static async Task<LocalOutcome> Run(ToolRegistry registry, string tool, JsonObject args, ToolContext ctx)
@@ -275,41 +269,13 @@ public static class LocalIntents
         return new LocalOutcome(true, result.Ok, result.Summary);
     }
 
-    private static string? TryResolveProject(ToolContext ctx, string name)
-    {
-        name = Regex.Replace(name, @"\s+project$", "", RegexOptions.IgnoreCase).Trim();
-        if (name.Length < 3) return null;
-        foreach (var root in ctx.Runtime.Paths.Roots)
-        {
-            try
-            {
-                foreach (var dir in System.IO.Directory.EnumerateDirectories(root, "*", System.IO.SearchOption.AllDirectories))
-                {
-                    var folder = System.IO.Path.GetFileName(dir);
-                    if (!folder.Equals(name, StringComparison.OrdinalIgnoreCase) &&
-                        !folder.Replace("-", " ").Replace("_", " ")
-                            .Contains(name, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (System.IO.Directory.Exists(System.IO.Path.Combine(dir, ".git")) ||
-                        System.IO.File.Exists(System.IO.Path.Combine(dir, "package.json")) ||
-                        System.IO.File.Exists(System.IO.Path.Combine(dir, "build.gradle")))
-                    {
-                        ctx.Runtime.LastProjectPath = dir;
-                        return dir;
-                    }
-                }
-            }
-            catch
-            {
-                // Ignore unreadable roots.
-            }
-        }
-        return null;
-    }
-
     public static string HelpText() => """
         I can run these on the laptop directly, even offline:
 
-        • open Chrome / open VS Code / open my Vendora project
+        • open Chrome / open VS Code / open Notepad
+        • open dave.txt — or just say "open dave dot text"
+        • open downloads / open my documents / open the Desktop
+        • open my Vendora project
         • take a screenshot, lock the laptop
         • volume up, volume 40, mute, brightness 70
         • system status / battery
@@ -319,6 +285,10 @@ public static class LocalIntents
         • remember that <fact>, what do you remember about <topic>
         • sleep, restart, shut down (these ask first)
         • stop — cancels whatever is running
+
+        Say "Friday" first when the wake word is on. After a command I keep
+        listening for 30 seconds without it; silence for 30 seconds switches
+        me back to waiting for my name.
 
         Anything else goes to my AI brain when a key is configured.
         """;

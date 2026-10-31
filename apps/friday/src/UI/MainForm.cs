@@ -65,6 +65,7 @@ public sealed class MainForm : Form
     private Label _micLabel = new();
     private Label _aiLabel = new();
     private Label _serverLabel = new();
+    private Label _relayLabel = new();
     private Label _title = new();
     private Label _subtitle = new();
     private Label _sideHeader = new();
@@ -88,6 +89,7 @@ public sealed class MainForm : Form
     private NotifyIcon _tray = new();
     private ToolTip _tips = new();
     private System.Windows.Forms.Timer _refresh = new();
+    private System.Windows.Forms.Timer _hud = new();
 
     private UiMode _mode = UiMode.Windowed;
     private bool _exiting;
@@ -118,8 +120,16 @@ public sealed class MainForm : Form
         ResumeLayout(performLayout: true);
 
         _refresh.Interval = 1200;
-        _refresh.Tick += (_, _) => RefreshTasks();
+        _refresh.Tick += (_, _) =>
+        {
+            RefreshTasks();
+            UpdateServer();
+        };
         _refresh.Start();
+
+        _hud.Interval = 400;
+        _hud.Tick += (_, _) => UpdateHudClock();
+        _hud.Start();
 
         FormClosing += OnFormClosing;
         Shown += OnShown;
@@ -153,8 +163,36 @@ public sealed class MainForm : Form
         _header.BackColor = Theme.Bg;
         _header.Paint += (_, e) =>
         {
-            using var pen = new Pen(Theme.Line);
-            e.Graphics.DrawLine(pen, 24, _header.Height - 1, _header.Width - 24, _header.Height - 1);
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var y = _header.Height - 1;
+
+            // A gold scan-line that fades out at both ends.
+            var rect = new RectangleF(24, y - 1, Math.Max(1, _header.Width - 48), 2);
+            using (var brush = new LinearGradientBrush(rect, Color.Transparent, Color.Transparent,
+                       LinearGradientMode.Horizontal))
+            {
+                brush.InterpolationColors = new ColorBlend
+                {
+                    Colors = new[]
+                    {
+                        Color.FromArgb(0, Theme.Gold),
+                        Color.FromArgb(120, Theme.Gold),
+                        Color.FromArgb(0, Theme.Gold),
+                    },
+                    Positions = new[] { 0f, 0.55f, 1f },
+                };
+                g.FillRectangle(brush, rect);
+            }
+
+            // Fine ticks under the header, like a HUD frame.
+            using var tick = new Pen(Color.FromArgb(26, Theme.Gold));
+            for (var x = 24; x < _header.Width - 24; x += 14)
+                g.DrawLine(tick, x, _header.Height - 4, x, _header.Height - 2);
+
+            // Accent bar beside the wordmark.
+            using var bar = new SolidBrush(Color.FromArgb(200, Theme.Gold));
+            g.FillRectangle(bar, 16, 18, 2, _header.Height - 36);
         };
         _header.MouseDown += (_, e) =>
         {
@@ -164,9 +202,9 @@ public sealed class MainForm : Form
 
         _title = new Label
         {
-            Text = "FRIDAY",
+            Text = "F R I D A Y",
             AutoSize = true,
-            Font = Theme.Display(26f),
+            Font = Theme.Display(24f),
             ForeColor = Theme.Gold,
             BackColor = Color.Transparent,
             Location = new Point(26, 12),
@@ -174,12 +212,12 @@ public sealed class MainForm : Form
         _title.MouseDown += (_, e) => { if (_mode == UiMode.Compact) DragWindow(); };
         _subtitle = new Label
         {
-            Text = "LOCAL ASSISTANT  ·  " + Environment.MachineName.ToUpperInvariant(),
+            Text = "VOICE INTERFACE  ·  ONLINE  ·  " + Environment.MachineName.ToUpperInvariant(),
             AutoSize = true,
             Font = Theme.Ui(7.75f, FontStyle.Bold),
             ForeColor = Theme.Faint,
             BackColor = Color.Transparent,
-            Location = new Point(29, 48),
+            Location = new Point(220, 26),
         };
 
         _header.Controls.Add(_title);
@@ -461,7 +499,7 @@ public sealed class MainForm : Form
             BackColor = Theme.PanelRaised,
             ForeColor = Theme.Text,
             Font = Theme.Ui(11f),
-            PlaceholderText = "Ask Friday, or tell it what to do…",
+            PlaceholderText = "Speak, or type — say “Friday, open Chrome”…",
         };
         _input.KeyDown += OnInputKeyDown;
         _inputShell.Controls.Add(_input);
@@ -496,7 +534,7 @@ public sealed class MainForm : Form
         var grid = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 7,
+            ColumnCount = 8,
             RowCount = 1,
             Padding = new Padding(18, 0, 14, 0),
             BackColor = Color.Transparent,
@@ -505,7 +543,8 @@ public sealed class MainForm : Form
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104f));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 122f));
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210f));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175f));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112f));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92f));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 156f));
         grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -515,6 +554,7 @@ public sealed class MainForm : Form
         _micLabel = StatusLabel("○ MIC READY", Theme.Dim);
         _aiLabel = StatusLabel("AI", Theme.Dim);
         _serverLabel = StatusLabel("PHONE OFF", Theme.Dim);
+        _relayLabel = StatusLabel("RELAY OFF", Theme.Faint);
         _modeButton = new FButton("AURORA")
         {
             Dock = DockStyle.Fill,
@@ -541,8 +581,9 @@ public sealed class MainForm : Form
         grid.Controls.Add(_micLabel, 2, 0);
         grid.Controls.Add(_aiLabel, 3, 0);
         grid.Controls.Add(_serverLabel, 4, 0);
-        grid.Controls.Add(_modeButton, 5, 0);
-        grid.Controls.Add(_emergency, 6, 0);
+        grid.Controls.Add(_relayLabel, 5, 0);
+        grid.Controls.Add(_modeButton, 6, 0);
+        grid.Controls.Add(_emergency, 7, 0);
         _status.Controls.Add(grid);
         Controls.Add(_status);
     }
@@ -569,7 +610,7 @@ public sealed class MainForm : Form
         };
         menu.Items.Add("Open Friday", null, (_, _) => RestoreFromTray());
         menu.Items.Add("Compact mode", null, (_, _) => { RestoreFromTray(); ApplyMode(UiMode.Compact); });
-        menu.Items.Add("Push to talk", null, (_, _) => { RestoreFromTray(); ToggleVoice(); });
+        menu.Items.Add("Push to talk", null, (_, _) => { RestoreFromTray(); PushToTalk(); });
         menu.Items.Add(new ToolStripSeparator());
         var emergencyItem = new ToolStripMenuItem("Emergency stop") { CheckOnClick = false };
         emergencyItem.Click += (_, _) => ToggleEmergency();
@@ -606,12 +647,20 @@ public sealed class MainForm : Form
         _runtime.Tasks.Changed += _ => OnUi(RefreshTasks);
         _runtime.Tasks.ApprovalRequested += pending => OnUi(() => ShowApproval(pending));
         _runtime.Tasks.ApprovalResolved += _ => OnUi(HideApproval);
-        _runtime.Voice.Heard += text => OnUi(() => Submit(text, "voice"));
+        _runtime.Voice.Heard += text => OnUi(() =>
+        {
+            _core.Pulse();
+            Submit(text, "voice");
+        });
         _runtime.Voice.WakeWordHeard += _ => OnUi(() =>
         {
-            AppendSystem("Wake word heard.");
-            _runtime.Voice.ListenOnce();
+            // The engine has already opened the 30-second window and is still
+            // listening. Do not switch to a one-shot capture here.
+            _core.Pulse();
+            try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
             UpdateMic();
+            _stateLabel.Text = "● LISTENING";
+            _stateLabel.ForeColor = Theme.Gold;
         });
         _runtime.Voice.StatusChanged += message => OnUi(() =>
         {
@@ -647,7 +696,9 @@ public sealed class MainForm : Form
         if (_runtime.Config.Voice.WakeWordEnabled && _runtime.Config.Voice.Enabled)
         {
             if (_runtime.Voice.StartListening(wakeMode: true))
-                AppendSystem("Wake word listening is on. Say \"" + _runtime.Config.Voice.WakeWord + "\".");
+                AppendSystem("Always listening. Say \"" + _runtime.Config.Voice.WakeWord +
+                             "\" — after a command I stay hands-free for " +
+                             _runtime.Config.Voice.FollowUpSeconds + " seconds of silence.");
         }
 
         if (!_runtime.Brain.AiConfigured)
@@ -720,11 +771,39 @@ public sealed class MainForm : Form
         if (_runtime.Voice.IsListening)
         {
             _runtime.Voice.StopListening();
+            _core.FollowUpSeconds = 0;
         }
         else
         {
-            _runtime.Voice.ListenOnce();
+            // With the wake word on, the microphone stays open and waits for the
+            // name. Without it, the button captures one phrase.
+            if (_runtime.Config.Voice.WakeWordEnabled)
+                _runtime.Voice.StartListening(wakeMode: true);
+            else
+                _runtime.Voice.ListenOnce();
+            _core.Pulse();
         }
+        UpdateMic();
+    }
+
+    /// <summary>Push-to-talk: one phrase, no wake word required.</summary>
+    private void PushToTalk()
+    {
+        if (!_runtime.Config.Voice.Enabled)
+        {
+            AppendSystem("Voice is turned off in Settings.");
+            return;
+        }
+        if (!_runtime.Voice.Available)
+        {
+            AppendSystem(_runtime.Voice.AvailabilityError.Length > 0
+                ? _runtime.Voice.AvailabilityError
+                : "Speech recognition is not available on this machine.");
+            return;
+        }
+
+        _runtime.Voice.ListenOnce();
+        _core.Pulse();
         UpdateMic();
     }
 
@@ -800,6 +879,20 @@ public sealed class MainForm : Form
         ApplyVisuals();
         UpdateState(_runtime.State.State, _runtime.State.Detail);
         UpdateServer();
+
+        // Turning the wake word on should take effect immediately, and turning
+        // it off should release the microphone rather than leave it half-open.
+        if (_runtime.Config.Voice.Enabled && _runtime.Config.Voice.WakeWordEnabled &&
+            !_runtime.Voice.IsListening)
+        {
+            _runtime.Voice.StartListening(wakeMode: true);
+        }
+        else if ((!_runtime.Config.Voice.Enabled || !_runtime.Config.Voice.WakeWordEnabled) &&
+                 _runtime.Voice.IsListening)
+        {
+            _runtime.Voice.StopListening();
+        }
+
         UpdateMic();
     }
 
@@ -895,14 +988,56 @@ public sealed class MainForm : Form
             _micLabel.Text = _runtime.Config.Voice.Enabled ? "○ MIC N/A" : "○ MIC OFF";
             _micLabel.ForeColor = Theme.Faint;
             _mic.Text = "MIC";
+            _mic.Primary = false;
             return;
         }
 
-        var live = _runtime.State.MicActive;
-        _micLabel.Text = live ? "● MIC LIVE" : _runtime.Voice.IsListening ? "◌ MIC OPEN" : "○ MIC READY";
-        _micLabel.ForeColor = live ? Theme.Gold : Theme.Dim;
-        _mic.Text = live ? "STOP" : "MIC";
-        _mic.Primary = live;
+        var follow = _runtime.Voice.FollowUpRemaining;
+        var listening = _runtime.Voice.IsListening;
+        var wake = _runtime.Config.Voice.WakeWordEnabled;
+        _core.FollowUpSeconds = follow;
+
+        if (!listening)
+        {
+            _micLabel.Text = "○ MIC READY";
+            _micLabel.ForeColor = Theme.Dim;
+            _mic.Text = wake ? "LISTEN" : "MIC";
+            _mic.Primary = false;
+            _mic.AccentColor = Theme.Accent(_runtime.Config.Ui.Accent);
+            return;
+        }
+
+        if (follow > 0)
+        {
+            _micLabel.Text = $"● MIC · {follow}s";
+            _micLabel.ForeColor = Theme.Gold;
+        }
+        else if (wake)
+        {
+            var word = string.IsNullOrWhiteSpace(_runtime.Config.Voice.WakeWord)
+                ? "FRIDAY"
+                : _runtime.Config.Voice.WakeWord.ToUpperInvariant();
+            _micLabel.Text = "● WAITING FOR " + word;
+            _micLabel.ForeColor = Theme.Dim;
+        }
+        else
+        {
+            _micLabel.Text = "● MIC LIVE";
+            _micLabel.ForeColor = Theme.Gold;
+        }
+
+        _mic.Text = wake ? "PAUSE" : "STOP";
+        _mic.Primary = true;
+        _mic.AccentColor = follow > 0 ? Theme.Gold : Theme.Accent(_runtime.Config.Ui.Accent);
+    }
+
+    private void UpdateHudClock()
+    {
+        _core.FollowUpSeconds = _runtime.Voice.FollowUpRemaining;
+        UpdateMic();
+        if (!_loaded) return;
+        var state = _runtime.Voice.IsListening ? "LISTENING" : "STANDBY";
+        _subtitle.Text = $"VOICE INTERFACE  ·  {state}  ·  {Environment.MachineName.ToUpperInvariant()}  ·  {DateTime.Now:HH:mm:ss}";
     }
 
     private void UpdateServer()
@@ -927,6 +1062,27 @@ public sealed class MainForm : Form
         _aiLabel.Text = _runtime.Brain.AiConfigured ? "AI READY" : "AI KEY NEEDED";
         _aiLabel.ForeColor = _runtime.Brain.AiConfigured ? Theme.Dim : Color.FromArgb(214, 150, 90);
         _aiLabel.ForeColor = _runtime.Brain.AiConfigured ? Theme.Dim : Color.FromArgb(214, 150, 90);
+
+        var relay = _runtime.Relay;
+        if (!_runtime.Config.Relay.Enabled)
+        {
+            _relayLabel.Text = "RELAY OFF";
+            _relayLabel.ForeColor = Theme.Faint;
+            _tips.SetToolTip(_relayLabel, "Internet relay is disabled in Settings.");
+        }
+        else if (relay.Running)
+        {
+            _relayLabel.Text = "● RELAY  " + relay.Forwarded;
+            _relayLabel.ForeColor = Theme.Dim;
+            _tips.SetToolTip(_relayLabel,
+                relay.StatusText + "\nLaptop id: " + _runtime.Config.Relay.LaptopId);
+        }
+        else
+        {
+            _relayLabel.Text = "RELAY RETRY";
+            _relayLabel.ForeColor = Color.FromArgb(214, 150, 90);
+            _tips.SetToolTip(_relayLabel, relay.StatusText);
+        }
     }
 
     private void UpdateEmergency(bool engaged)
@@ -1046,10 +1202,11 @@ public sealed class MainForm : Form
 
         _compact.Text = mode == UiMode.Compact ? "FULL" : "COMPACT";
         _subtitle.Visible = mode != UiMode.Compact;
+        _title.Text = mode == UiMode.Compact ? "FRIDAY" : "F R I D A Y";
         _header.Height = mode == UiMode.Compact ? 56 : 72;
         _title.Location = new Point(26, mode == UiMode.Compact ? 10 : 12);
-        _title.Font = Theme.Display(mode == UiMode.Compact ? 19f : 26f);
-        _subtitle.Location = new Point(29, 48);
+        _title.Font = Theme.Display(mode == UiMode.Compact ? 19f : 24f);
+        _subtitle.Location = new Point(220, 26);
         _inputBar.Height = mode == UiMode.Compact ? 60 : 66;
         _inputBar.Padding = new Padding(mode == UiMode.Compact ? 12 : 24, 8,
             mode == UiMode.Compact ? 12 : 24, mode == UiMode.Compact ? 10 : 12);
@@ -1097,6 +1254,7 @@ public sealed class MainForm : Form
     {
         _exiting = true;
         _refresh.Stop();
+        _hud.Stop();
         Close();
     }
 
@@ -1110,6 +1268,7 @@ public sealed class MainForm : Form
         }
 
         try { _tray.Visible = false; _tray.Dispose(); } catch { }
+        try { _hud.Stop(); _hud.Dispose(); } catch { }
         try { _runtime.Voice.StopListening(); } catch { }
     }
 
@@ -1139,7 +1298,7 @@ public sealed class MainForm : Form
             {
                 case HotkeyPushToTalk:
                     RestoreFromTray();
-                    ToggleVoice();
+                    PushToTalk();
                     return;
                 case HotkeyToggle:
                     if (Visible && WindowState != FormWindowState.Minimized) HideToTray(false);

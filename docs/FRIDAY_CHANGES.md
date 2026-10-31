@@ -1,11 +1,40 @@
-# Changes - JARVIS 3.4 and Friday
+# Changes - JARVIS 3.5, JARVIS 3.4 and Friday
 
 This lists what changed, file by file, and why. It covers the Friday laptop app
-(entirely new) and the JARVIS 3.4 phone changes. It does not repeat the protocol
-or the security model; those are in `FRIDAY_API.md` and `FRIDAY_SECURITY.md`.
+and the JARVIS phone changes. It does not repeat the protocol or the security
+model; those are in `FRIDAY_API.md` and `FRIDAY_SECURITY.md`.
 
-Nothing existing was removed. JARVIS 3.3 keeps every feature; `laptop-agent/`
-still works and still handles "on my laptop ..." while it is configured.
+Nothing existing was removed. Every earlier JARVIS feature remains, and
+`laptop-agent/` still handles "on my laptop ..." while it is configured.
+
+---
+
+## 0. JARVIS 3.5 and Friday 1.1 (voice and internet link)
+
+This round is about making both halves usable as assistants rather than
+text-command panels. The largest changes:
+
+| Change | Why |
+|---|---|
+| Continuous Android conversation (`VoiceConversation`) | One tap starts a session: JARVIS listens, answers aloud, and keeps listening for a follow-up without another mic tap. Interrupting while it speaks stops the voice and captures the correction. |
+| Wake phrases with `JarvisWakeService` | "Hey JARVIS", "JARVIS", "Little help here, JARVIS" and "JARVIS, you up?" start the conversation from the notification. The service is a microphone foreground service with a visible notification, not a hidden listener. |
+| Android `SpeechOutput` + `SentenceBuffer` | Answers are spoken sentence by sentence while the model is still writing, with the chosen voice, rate and pitch, audio focus, a hard stop and honest error reporting. |
+| Persisted conversation context | The last six exchanges are stored privately and sent with the next question, so "what about the second one?" has a referent. |
+| New JARVIS conversation UI | Animated core, listening/thinking/speaking states, live transcript, connection and device status, repeat, mute, stop, new conversation and typed input. |
+| Voice settings screen | Voice, rate, pitch, wake toggle and a real test sentence; no hidden defaults. |
+| Streaming AI (`AiClient.Answer.streamed`) | OpenAI-compatible SSE parsing with a non-streaming fallback, so slow providers still answer. |
+| Friday streamed speech | `VoiceEngine` and `AiClient.CompleteStreamingAsync` speak complete sentences as they arrive instead of waiting for the full reply. |
+| Wake-word behaviour on Windows | The wake word is on by default, a bare "Friday" opens a 30-second hands-free window reset by speech, and the microphone is released when the setting is off. |
+| Spoken file and app fixes | "dave dot text" creates or finds `dave.txt`; "open chrome" launches `chrome.exe`, never a folder; folder aliases still resolve to folders. Covered by self-tests. |
+| Internet relay | `relay/server.js` plus `RelayClient` let the phone reach the laptop across networks with no port forwarding. Friday dials out, the relay forwards only `/v1/`, and Friday still authenticates every device. |
+| Relay identity | `RelayConfig` generates a public laptop id and a 256-bit key, stores the key with DPAPI, supports `FRIDAY_RELAY_KEY`, rotation, and a live status line in Settings. |
+| Relay-aware Android client | `FridayClient` accepts relay-only configuration, skips LAN certificate pinning only in relay mode, learns `relay_laptop` from pairing and shows relay-specific errors instead of generic ones. |
+| Relay server tests | `relay/test-relay.js` covers offline routing, round trips, key mismatch, timeouts, path allowlist, invalid ids, pairing, rate limits and secret-free health. |
+| Version bump | JARVIS 3.5 (`versionCode` 17) and Friday 1.1.0. Both upgrade in place with the same package/app identity. |
+
+What this round did **not** change: Friday's permission gate, approval model,
+shell allowlist, audit log, retention or emergency stop. The relay adds a
+transport, not a bypass - every relayed request still passes the same gate.
 
 ---
 
@@ -159,14 +188,25 @@ These are the changes behind the numbers in `FRIDAY_TESTING.md`.
 
 ## 6. Binaries delivered
 
+3.5 / Friday 1.1.0:
+
+| File | Size | SHA-256 |
+|---|---|---|
+| `Desktop\Friday-1.1.0.exe` | 1,723,454 bytes | `3F067DE76A0F848AD14F9AD17919D183F7B7E4A8CDD923DAC60BE3B11AF10CD8` |
+| `Desktop\JARVIS-3.5.apk` | 5,789,866 bytes | `9FEAABE378E75506B7A01E825DACC5BF460BC1BDF9E824C2E7054090FF6EF87F` |
+
+Repo copies: `apps\friday\dist\Friday-1.1.0.exe`,
+`apps\android-notifier\dist\JARVIS-3.5.apk`. The previous 3.4 APK and the old
+`friday.exe` are left in place under their own names; nothing was overwritten.
+The APK is debug-signed (same key as 3.3 and 3.4); the EXE is unsigned.
+Rebuilding either file changes its hash.
+
+Earlier 3.4 delivery, kept for reference:
+
 | File | Size | SHA-256 |
 |---|---|---|
 | `Desktop\friday.exe` | 1,645,630 bytes | `626E40BDFDF978BD2374C2CD2E1B3339A193F1A80312844762942E04B8620846` |
 | `Desktop\JARVIS-3.4.apk` | 5,746,793 bytes | `921465A8B0D15B1183CB6CD4B24B05AB74C49B179963E94FF00A7BA9B0AD641B` |
-
-Repo copies: `apps\friday\dist\friday.exe`,
-`apps\android-notifier\dist\JARVIS-3.4.apk`. The APK is debug-signed (same key
-as 3.3); `friday.exe` is unsigned. Rebuilding either file changes its hash.
 
 ---
 

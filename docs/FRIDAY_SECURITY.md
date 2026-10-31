@@ -4,22 +4,24 @@ This document says what Friday protects, how, and where the boundary actually
 ends. It describes the code as shipped, not an aspiration. Anything not
 implemented is listed in [Residual risks](#8-residual-risks-and-what-is-not-covered).
 
-The short version: the phone link is TLS with a pinned certificate, each phone
-has its own hashed token, every task passes a permission gate, and nothing lets a
-caller run a raw shell.
+The short version: the phone link is TLS, each phone has its own hashed token,
+every task passes a permission gate, and nothing lets a caller run a raw shell.
+On the LAN the laptop certificate is pinned; across the internet an optional
+outbound relay carries only `/v1/` requests, and Friday still checks the token.
 
 ---
 
 ## 1. Trust boundaries
 
 ```
- microphone / keyboard            phone (JARVIS 3.4)
+ microphone / keyboard            phone (JARVIS 3.5)
         |                                |
-   Friday UI  ---------------------  TLS :8790, token, pinned cert
-        |                                |
+   Friday UI  ---------------------  TLS :8790 + pinned cert
+        |                                |         (LAN)
    permission gate  <--- policy ---- request validation
-        |
-   tools: apps, files, input, screen, shell, system, web
+        |                                |
+   tools: apps, files, input,       optional relay
+   screen, shell, system, web       (outbound long poll)
         |
    the operating system and the user's own account
 ```
@@ -55,6 +57,31 @@ caller run a raw shell.
   example while debugging on the loopback interface). It is never the default and
   the Android client reports it.
 
+### 2.1 Internet relay
+
+The optional relay (`relay/server.js`) lets a phone reach the laptop from another
+network. The laptop makes only **outbound HTTPS** requests to it; no inbound port
+is opened.
+
+- The phone calls `https://<relay>/r/<laptopId>/v1/...` over the relay's own
+  publicly-trusted TLS. The laptop's self-signed pin does not apply to that hop.
+- The laptop proves it owns the id with a separate 256-bit relay key in a header.
+  The relay stores only a **SHA-256 hash**, in memory. A restart forgets it and
+  the laptop re-registers on its next poll. The key is DPAPI-encrypted on disk;
+  `FRIDAY_RELAY_KEY` can override it from the environment.
+- The relay forwards only paths starting with `/v1/`, rejects `..`, caps bodies
+  (2 MB by default) and answers a duplicate response for the same request id with
+  `409`. It has no command logic, shell, filesystem access or device tokens.
+- Friday validates the phone's device token itself on every relayed request, so
+  revoking a device still takes effect immediately. The relay cannot bypass
+  pairing, approvals, policy or the emergency stop.
+- Pairing via the relay is broadcast to connected laptops and rate-limited to 20
+  attempts per IP per minute. The winning laptop's id is returned to the phone as
+  `relay_laptop`, so no manual id copying is needed.
+- A relay restart is survivable by design: Friday reconnects with backoff, and
+  in-flight requests fail with `503`/`504` rather than being replayed.
+
+
 ## 3. Pairing and device identity
 
 - **Code**: 8 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no `0/O/1/I`),
@@ -74,7 +101,11 @@ caller run a raw shell.
   then forgets the token and the pin. If the laptop is unreachable, the phone
   says so and tells you to remove the device on the laptop.
 - Pairing requires physical access to the laptop screen (the code is only shown
-  there) plus the phone being on the same network.
+  there). Over a relay the phone does not need to be on the same network; the
+  code still has to come from the laptop and is forwarded only through the
+  outbound relay tunnel.
+- Through the relay the laptop id is learned from the pairing response, not typed
+  by hand. The phone never stores the relay key.
 
 ## 4. Request handling
 
@@ -190,6 +221,10 @@ covered by a self-test check.
 - Device tokens are stored only as SHA-256 hashes on the laptop and in the
   phone's private preferences. Neither the token nor the pairing code is ever
   logged.
+- The relay key is a separate 256-bit secret, DPAPI-encrypted in `config.json`
+  (or read from `FRIDAY_RELAY_KEY`). The relay keeps only its SHA-256 hash in
+  memory. The laptop id is public routing information, not a credential. Neither
+  is written to the audit log.
 - `audit.jsonl` records: timestamp, action, actor, device id, request id,
   decision, ok flag, and a trimmed detail. That is enough to answer "who asked
   for this and what was decided" without storing credentials.
@@ -223,17 +258,20 @@ covered by a self-test check.
 
 These are real, and you should know them before relying on this:
 
-1. **No device testing.** The Android client has not been run on a phone or
-   emulator in this environment. Its TLS pinning and pairing flow are implemented
-   and compile, but no on-device handshake has been observed. Treat them as
-   unverified until you pair once and watch it succeed.
+1. **Android runtime.** The 3.5 client has not been run on a phone or emulator in
+   this environment: continuous conversation, wake listening, TTS, relay pairing
+   and the relay transport compile and are exercised on the laptop side, but no
+   on-device handshake has been observed. Treat them as unverified until you pair
+   once and watch it succeed.
 2. **No code signing.** `friday.exe` is not signed, so Windows SmartScreen may
    warn. Nothing verifies that the exe you downloaded is the one that was built.
 3. **No auto-update.** Updating means replacing the file by hand. There is no
    signed update channel.
-4. **Local network only.** There is no relay, no NAT traversal and no cloud
-   hop. An off-LAN setup needs a private tunnel (Tailscale or similar), which is
-   not implemented or tested here. Never port-forward 8790.
+4. **The relay is infrastructure you run.** The code and its local checks are in
+   this repository, but the deployed service and a real cross-network phone were
+   not tested here. Whoever runs the relay sees traffic metadata (timing, sizes,
+   laptop id) even though bodies are encrypted by HTTPS. Use a relay you control,
+   or a private tunnel. Never port-forward 8790.
 5. **Same-account processes are trusted.** Anything running as your Windows user
    can read `%APPDATA%\Friday`, call the tools, or decrypt the stored key with
    DPAPI. Friday does not defend against malware already on the machine.
@@ -244,9 +282,11 @@ These are real, and you should know them before relying on this:
 7. **The AI provider is a third party.** Questions, approved memories and tool
    results needed for that turn leave the machine. If that is unacceptable, do
    not set a key; local commands keep working.
-8. **Voice is Windows speech.** Recognition is local but its accuracy and its
-   default-device limitation are Windows', not Friday's. The wake word is off by
-   default so nothing captures while idle.
+8. **Voice is Windows speech.** Recognition is local, but its accuracy and its
+   default-device limitation are Windows', not Friday's. The wake word is on by
+   default, so the microphone is open while Friday runs; the status bar shows
+   `MIC` only when capture is really active, and **Settings > Voice** turns it
+   off. Some Windows TTS voices are noticeably robotic.
 9. **Firewall is manual.** Friday does not create a firewall rule. Until you add
    one, the phone cannot reach it.
 10. **The audit log and transcript are plain files.** Protected by NTFS

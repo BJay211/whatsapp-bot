@@ -12,7 +12,7 @@ using Friday.Tools;
 
 namespace Friday.Ai;
 
-public sealed record AssistantReply(bool Ok, string Text, string? Data = null, bool UsedAi = false);
+public sealed record AssistantReply(bool Ok, string Text, string? Data = null, bool UsedAi = false, bool Spoken = false);
 
 /// <summary>
 /// The reasoning loop. It separates what the model asks for from what is allowed
@@ -80,20 +80,43 @@ public sealed class Orchestrator
         var tools = _runtime.Tools.SchemaFor(includeDestructive: true);
         var transcript = new StringBuilder();
         var usedAi = false;
+        var spokenAny = false;
 
         for (var round = 0; round < Math.Clamp(_runtime.Config.Ai.MaxToolRounds, 1, 12); round++)
         {
             context.Token.ThrowIfCancellationRequested();
             state.Set(FridayState.Thinking, round == 0 ? "Thinking…" : "Working through it…");
 
+            var speechStarted = false;
             AiReply reply;
             try
             {
-                reply = await _ai.CompleteAsync(messages, tools, context.Token).ConfigureAwait(false);
+                reply = await _ai.CompleteStreamingAsync(
+                    messages,
+                    tools,
+                    sentence =>
+                    {
+                        if (!speechStarted)
+                        {
+                            speechStarted = _runtime.Voice.BeginStreamedSpeech();
+                            if (!speechStarted) return;
+                        }
+                        _runtime.Voice.EnqueueSpeech(sentence);
+                    },
+                    context.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
+                if (speechStarted) _runtime.Voice.EndStreamedSpeech();
                 return new AssistantReply(false, "Cancelled.");
+            }
+            finally
+            {
+                if (speechStarted)
+                {
+                    _runtime.Voice.EndStreamedSpeech();
+                    spokenAny = true;
+                }
             }
 
             if (!reply.Ok)
@@ -102,7 +125,7 @@ public sealed class Orchestrator
                 _runtime.Conversation.Add("friday", failure);
                 state.Set(FridayState.Error, "AI unavailable");
                 state.Flash(FridayState.Error, "AI unavailable");
-                return new AssistantReply(false, failure, null, true);
+                return new AssistantReply(false, failure, null, true, spokenAny);
             }
 
             usedAi = true;
@@ -124,7 +147,7 @@ public sealed class Orchestrator
                 _runtime.Conversation.Add("friday", final);
                 state.Set(FridayState.Success, "Done");
                 state.Flash(FridayState.Success, "Done");
-                return new AssistantReply(true, final, null, true);
+                return new AssistantReply(true, final, null, true, speechStarted || spokenAny);
             }
 
             messages.Add(new ChatMessage
@@ -176,7 +199,7 @@ public sealed class Orchestrator
             : "I stopped after several steps without finishing. Nothing else is running.";
         _runtime.Conversation.Add("friday", exhausted);
         state.Set(FridayState.Error, "Step limit reached");
-        return new AssistantReply(false, exhausted, null, usedAi);
+        return new AssistantReply(false, exhausted, null, usedAi, spokenAny);
     }
 
     private void usage(AiReply reply)

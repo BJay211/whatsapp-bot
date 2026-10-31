@@ -3,92 +3,286 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:background="@color/bg_primary"
+    android:orientation="vertical">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Ask your assistant"
-        android:textSize="22sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="12dp"
-        android:alpha="0.7"
-        android:text="Commands run on the phone: apps, calls, brightness, volume, alarms. Say &quot;Friday, ...&quot; to use the assistant on your laptop, or add &quot;on my laptop&quot; for the older laptop agent. Questions go to your AI if set up, otherwise to your archive." />
-
-    <com.google.android.material.textfield.TextInputLayout
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Your question">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/editQuestion"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="textMultiLine"
-            android:minLines="2" />
-    </com.google.android.material.textfield.TextInputLayout>
-
+    <!-- Header -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:orientation="horizontal">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="2dp">
 
-        <Button
-            android:id="@+id/btnAsk"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBack"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:minWidth="0dp"
+            android:text="‹"
+            android:textColor="@color/cyan"
+            android:textSize="24sp" />
+
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Ask" />
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-condensed"
+                android:letterSpacing="0.32"
+                android:shadowColor="@color/cyan_glow"
+                android:shadowRadius="12"
+                android:text="J.A.R.V.I.S"
+                android:textColor="@color/cyan"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.18"
+                android:text="STANDBY"
+                android:textColor="@color/text_dim"
+                android:textSize="9sp" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnVoiceSettings"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:minWidth="0dp"
+            android:text="VOICE"
+            android:textColor="@color/cyan_glow"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- Animated core -->
+    <FrameLayout
+        android:id="@+id/coreContainer"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="2dp">
+
+        <View
+            android:id="@+id/coreHalo"
+            android:layout_width="190dp"
+            android:layout_height="190dp"
+            android:layout_gravity="center"
+            android:alpha="0.30"
+            android:background="@drawable/glow_circle" />
+
+        <View
+            android:id="@+id/coreRing"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:layout_gravity="center"
+            android:background="@drawable/core_ring" />
+
+        <View
+            android:id="@+id/coreInner"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_gravity="center"
+            android:background="@drawable/core_inner_glow" />
+
+        <TextView
+            android:id="@+id/txtCoreLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:letterSpacing="0.12"
+            android:text="JARVIS"
+            android:textColor="@color/black"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/txtMicState"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center"
+        android:letterSpacing="0.16"
+        android:text="TAP TO SPEAK OR TYPE"
+        android:textColor="@color/text_secondary"
+        android:textSize="10sp" />
+
+    <!-- Conversation -->
+    <ScrollView
+        android:id="@+id/conversationScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="6dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/conversationList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="bottom"
+            android:orientation="vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="8dp" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/txtLive"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:paddingStart="18dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="18dp"
+        android:text=""
+        android:textColor="@color/amber"
+        android:textSize="10sp" />
+
+    <!-- Input -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="2dp">
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            app:cardBackgroundColor="@color/bg_card"
+            app:cardCornerRadius="26dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/border_cyan"
+            app:strokeWidth="1dp">
+
+            <EditText
+                android:id="@+id/editQuestion"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/transparent"
+                android:hint="Ask, or say “Hey JARVIS”…"
+                android:imeOptions="actionSend"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="3"
+                android:paddingStart="18dp"
+                android:paddingEnd="12dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"
+                android:textSize="14sp" />
+        </com.google.android.material.card.MaterialCardView>
 
         <ImageButton
             android:id="@+id/btnMic"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_gravity="center_vertical"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
             android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="@drawable/glow_circle"
             android:contentDescription="Speak"
+            android:padding="12dp"
             android:src="@android:drawable/ic_btn_speak_now"
             android:tint="@color/cyan" />
 
-        <Button
-            android:id="@+id/btnBack"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Back" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAsk"
+            style="@style/JarvisButton"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
+            android:minWidth="64dp"
+            android:text="SEND"
+            android:textColor="@color/black"
+            android:textSize="11sp"
+            app:backgroundTint="@color/cyan" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/btnCancel"
+    <!-- Conversation controls -->
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Cancel task on laptop"
-        android:visibility="gone" />
+        android:scrollbars="none"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
 
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_weight="1">
-
-        <TextView
-            android:id="@+id/txtAnswer"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textIsSelectable="true"
-            android:textSize="13sp" />
-    </ScrollView>
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="8dp">
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnStop"
+                style="@style/JarvisButton.Outlined"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:minWidth="0dp"
+                android:text="STOP"
+                android:textSize="9sp"
+                app:strokeColor="@color/red" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRepeat"
+                style="@style/JarvisButton.Outlined"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginStart="6dp"
+                android:minWidth="0dp"
+                android:text="REPEAT"
+                android:textSize="9sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMute"
+                style="@style/JarvisButton.Outlined"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginStart="6dp"
+                android:minWidth="0dp"
+                android:text="MUTE"
+                android:textSize="9sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnNew"
+                style="@style/JarvisButton.Outlined"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginStart="6dp"
+                android:minWidth="0dp"
+                android:text="NEW"
+                android:textSize="9sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancel"
+                style="@style/JarvisButton.Outlined"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginStart="6dp"
+                android:minWidth="0dp"
+                android:text="CANCEL LAPTOP TASK"
+                android:textSize="9sp"
+                android:visibility="gone"
+                app:strokeColor="@color/orange" />
+        </LinearLayout>
+    </HorizontalScrollView>
 </LinearLayout>

@@ -402,6 +402,10 @@ class Prefs private constructor(context: Context) {
      * when it was asked for on purpose.
      */
     fun fridayBaseUrl(): String {
+        // Relay mode wins: the laptop may be on a different network, so its LAN
+        // address is neither known nor useful.
+        if (fridayUseRelay()) return fridayRelayBaseUrl()
+
         val raw = fridayHost.trim().trimEnd('/')
         if (raw.isEmpty()) return ""
         val withScheme = when {
@@ -413,6 +417,37 @@ class Prefs private constructor(context: Context) {
         return if (hasPort) withScheme else "$withScheme:$fridayPort"
     }
 
+    /** Where a pairing request goes: the relay's global pair endpoint, or the LAN address. */
+    fun fridayPairingBaseUrl(): String =
+        if (fridayRelayUrl.isNotBlank()) fridayRelayUrl.trimEnd('/')
+        else fridayBaseUrl()
+
+    /**
+     * Relay (internet) transport. When a relay URL and a laptop id are present,
+     * every Friday call goes through the relay instead of the LAN address. The
+     * phone never holds a permanent relay secret: Friday still authenticates the
+     * device token on every request.
+     */
+    var fridayRelayUrl: String
+        get() = sp.getString(KEY_FRIDAY_RELAY_URL, BuildConfig.DEFAULT_RELAY_URL)
+            ?: BuildConfig.DEFAULT_RELAY_URL
+        set(value) {
+            sp.edit().putString(KEY_FRIDAY_RELAY_URL, value.trim().trimEnd('/')).apply()
+        }
+
+    var fridayRelayLaptop: String
+        get() = sp.getString(KEY_FRIDAY_RELAY_LAPTOP, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_FRIDAY_RELAY_LAPTOP, value.trim()).apply()
+        }
+
+    fun fridayUseRelay(): Boolean =
+        fridayRelayUrl.isNotBlank() && fridayRelayLaptop.isNotBlank()
+
+    fun fridayRelayBaseUrl(): String =
+        if (fridayRelayUrl.isBlank() || fridayRelayLaptop.isBlank()) ""
+        else fridayRelayUrl.trimEnd('/') + "/r/" + fridayRelayLaptop
+
     /** Forgets this phone's token, pin and device id. The laptop keeps its record. */
     fun clearFridayPairing() {
         sp.edit()
@@ -420,8 +455,86 @@ class Prefs private constructor(context: Context) {
             .remove(KEY_FRIDAY_FINGERPRINT)
             .remove(KEY_FRIDAY_DEVICE_ID)
             .remove(KEY_FRIDAY_PAIRED_AT)
+            .remove(KEY_FRIDAY_RELAY_LAPTOP)
             .apply()
     }
+
+    // ------------------------------------------------------------ voice conversation
+
+    /** Read every appropriate answer aloud. */
+    var voiceAutoSpeak: Boolean
+        get() = sp.getBoolean(KEY_VOICE_AUTO_SPEAK, true)
+        set(value) {
+            sp.edit().putBoolean(KEY_VOICE_AUTO_SPEAK, value).apply()
+        }
+
+    /** Silence only the voice; the conversation keeps working in text. */
+    var voiceMuted: Boolean
+        get() = sp.getBoolean(KEY_VOICE_MUTED, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_VOICE_MUTED, value).apply()
+        }
+
+    var voiceRate: Float
+        get() = sp.getFloat(KEY_VOICE_RATE, 1.0f).coerceIn(0.5f, 2.0f)
+        set(value) {
+            sp.edit().putFloat(KEY_VOICE_RATE, value.coerceIn(0.5f, 2.0f)).apply()
+        }
+
+    var voicePitch: Float
+        get() = sp.getFloat(KEY_VOICE_PITCH, 1.0f).coerceIn(0.5f, 2.0f)
+        set(value) {
+            sp.edit().putFloat(KEY_VOICE_PITCH, value.coerceIn(0.5f, 2.0f)).apply()
+        }
+
+    /** Android TTS voice name, empty means the engine default. */
+    var voiceName: String
+        get() = sp.getString(KEY_VOICE_NAME, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_VOICE_NAME, value.trim()).apply()
+        }
+
+    /** BCP-47 language tag, empty means the phone locale. */
+    var voiceLanguage: String
+        get() = sp.getString(KEY_VOICE_LANGUAGE, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_VOICE_LANGUAGE, value.trim()).apply()
+        }
+
+    /** Seconds the microphone keeps accepting follow-ups after a reply. */
+    var voiceFollowUpSeconds: Int
+        get() = sp.getInt(KEY_VOICE_FOLLOW_UP, 30).coerceIn(0, 300)
+        set(value) {
+            sp.edit().putInt(KEY_VOICE_FOLLOW_UP, value.coerceIn(0, 300)).apply()
+        }
+
+    /** Continue the conversation without another microphone tap. */
+    var voiceContinuous: Boolean
+        get() = sp.getBoolean(KEY_VOICE_CONTINUOUS, true)
+        set(value) {
+            sp.edit().putBoolean(KEY_VOICE_CONTINUOUS, value).apply()
+        }
+
+    /** Let a spoken "JARVIS, stop" interrupt speech. */
+    var voiceBargeIn: Boolean
+        get() = sp.getBoolean(KEY_VOICE_BARGE_IN, true)
+        set(value) {
+            sp.edit().putBoolean(KEY_VOICE_BARGE_IN, value).apply()
+        }
+
+    /** Foreground wake-word listening. Off unless the user asks for it. */
+    var wakeWordEnabled: Boolean
+        get() = sp.getBoolean(KEY_WAKE_WORD_ENABLED, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_WAKE_WORD_ENABLED, value).apply()
+        }
+
+    /** Last 24 turns, JSON. Used to keep context across app restarts. */
+    var conversationJson: String
+        get() = sp.getString(KEY_CONVERSATION_JSON, "") ?: ""
+        set(value) {
+            sp.edit().putString(KEY_CONVERSATION_JSON, value).apply()
+        }
 
     // ------------------------------------------------------------------- AI
 
@@ -530,6 +643,19 @@ class Prefs private constructor(context: Context) {
         const val KEY_FRIDAY_PAIRED_AT = "friday_paired_at"
         const val KEY_FRIDAY_PREFIX = "friday_invoke_prefix"
         const val KEY_FRIDAY_LAST_OK = "friday_last_ok"
+        const val KEY_FRIDAY_RELAY_URL = "friday_relay_url"
+        const val KEY_FRIDAY_RELAY_LAPTOP = "friday_relay_laptop"
+        const val KEY_VOICE_AUTO_SPEAK = "voice_auto_speak"
+        const val KEY_VOICE_MUTED = "voice_muted"
+        const val KEY_VOICE_RATE = "voice_rate"
+        const val KEY_VOICE_PITCH = "voice_pitch"
+        const val KEY_VOICE_NAME = "voice_name"
+        const val KEY_VOICE_LANGUAGE = "voice_language"
+        const val KEY_VOICE_FOLLOW_UP = "voice_follow_up"
+        const val KEY_VOICE_CONTINUOUS = "voice_continuous"
+        const val KEY_VOICE_BARGE_IN = "voice_barge_in"
+        const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
+        const val KEY_CONVERSATION_JSON = "conversation_json"
         const val KEY_AI_ENABLED = "ai_enabled"
         const val KEY_AI_BASE = "ai_base_url"
         const val KEY_AI_KEY = "ai_api_key"

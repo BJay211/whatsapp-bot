@@ -353,7 +353,7 @@ public sealed class FridayServer : IDisposable
     {
         ["ok"] = true,
         ["name"] = "Friday",
-        ["version"] = "1.0.0",
+        ["version"] = "1.1.0",
         ["protocol"] = "1.0",
         ["machine"] = Environment.MachineName,
         ["tls"] = _runtime.Config.Server.UseTls,
@@ -485,7 +485,7 @@ public sealed class FridayServer : IDisposable
         {
             ["ok"] = true,
             ["name"] = "Friday",
-            ["version"] = "1.0.0",
+            ["version"] = "1.1.0",
             ["protocol"] = "1.0",
             ["machine"] = Environment.MachineName,
             ["state"] = _runtime.State.State.ToString().ToLowerInvariant(),

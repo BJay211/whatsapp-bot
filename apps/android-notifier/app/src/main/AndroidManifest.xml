@@ -6,6 +6,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- The wake listener is a microphone foreground service with a visible
+         notification. Android 14 requires the matching typed permission. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Only used to bring the assistant up after the wake word was heard when
+         Android blocks a background activity start. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -119,6 +125,12 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ui.VoiceSettingsActivity"
+            android:exported="false"
+            android:label="Voice"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".ui.PermissionsActivity"
             android:exported="false"
             android:label="Access Control" />
@@ -193,6 +205,14 @@
             android:name=".ForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Foreground wake-word listener. Started only from the app, always
+             with a visible notification, and stopped while the assistant
+             activity owns the microphone. -->
+        <service
+            android:name=".voice.JarvisWakeService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <service
             android:name=".ui.AskTileService"

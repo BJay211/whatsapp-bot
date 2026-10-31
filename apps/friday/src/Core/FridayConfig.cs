@@ -23,10 +23,17 @@ public sealed class AiConfig
 public sealed class VoiceConfig
 {
     public bool Enabled { get; set; } = true;
-    public bool WakeWordEnabled { get; set; }
+    public bool WakeWordEnabled { get; set; } = true;
     public string WakeWord { get; set; } = "friday";
+
+    /// <summary>
+    /// How long the microphone keeps accepting commands without the wake word
+    /// after one is given. Reset by every spoken phrase; 0 disables the window.
+    /// </summary>
+    public int FollowUpSeconds { get; set; } = 30;
+
     public bool PushToTalk { get; set; } = true;
-    public bool AutoListenAfterReply { get; set; }
+    public bool AutoListenAfterReply { get; set; } = true;
     public bool InterruptOnSpeech { get; set; } = true;
     public string TtsVoice { get; set; } = "";
     public int TtsRate { get; set; } = 1;
@@ -113,6 +120,20 @@ public sealed class StartupConfig
     public bool StartMinimized { get; set; }
 }
 
+/// <summary>
+/// Internet relay. Friday dials out to a small relay service, so the phone can
+/// reach the laptop from any network without port forwarding. The laptop id is
+/// public routing information; the relay key proves which laptop owns that id
+/// and is DPAPI-protected like the AI key.
+/// </summary>
+public sealed class RelayConfig
+{
+    public bool Enabled { get; set; }
+    public string Url { get; set; } = "";
+    public string LaptopId { get; set; } = "";
+    public string KeyProtected { get; set; } = "";
+}
+
 public sealed class PrivacyConfig
 {
     public bool StoreConversation { get; set; } = true;
@@ -129,12 +150,13 @@ public sealed class PrivacyConfig
 /// </summary>
 public sealed class FridayConfig
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
     public string OwnerName { get; set; } = "";
     public AiConfig Ai { get; set; } = new();
     public VoiceConfig Voice { get; set; } = new();
     public UiConfig Ui { get; set; } = new();
     public ServerConfig Server { get; set; } = new();
+    public RelayConfig Relay { get; set; } = new();
     public PolicyConfig Policy { get; set; } = new();
     public StartupConfig Startup { get; set; } = new();
     public PrivacyConfig Privacy { get; set; } = new();
@@ -169,13 +191,25 @@ public sealed class FridayConfig
             config = new FridayConfig();
         }
 
+        var migrated = !File.Exists(AppPaths.ConfigFile) || config.Version < 2;
         config.Normalise();
-        if (!File.Exists(AppPaths.ConfigFile)) config.Save();
+        if (migrated) config.Save();
         return config;
     }
 
     public void Normalise()
     {
+        // Version 2 turned the wake word into the primary input and added the
+        // hands-free conversation window. Existing configs are migrated once so
+        // the new behaviour is actually on after an update.
+        if (Version < 2)
+        {
+            Voice.WakeWordEnabled = true;
+            Voice.AutoListenAfterReply = true;
+            if (Voice.FollowUpSeconds <= 0) Voice.FollowUpSeconds = 30;
+            Version = 2;
+        }
+
         if (Policy.FileRoots.Count == 0)
             Policy.FileRoots = AppPaths.DefaultFileRoots().ToList();
         if (Policy.ShellAllowlist.Count == 0)
@@ -193,11 +227,16 @@ public sealed class FridayConfig
         Server.Port = Server.Port is > 0 and < 65536 ? Server.Port : 8790;
         Server.MaxBodyKb = Math.Clamp(Server.MaxBodyKb, 8, 8192);
 
+        Relay.Url = (Relay.Url ?? "").Trim().TrimEnd('/');
+        Relay.LaptopId = (Relay.LaptopId ?? "").Trim();
+        if (Relay.Enabled) EnsureRelayIdentity();
+
         Ui.Fps = Math.Clamp(Ui.Fps, 15, 120);
         if (string.IsNullOrWhiteSpace(Ui.VisualMode)) Ui.VisualMode = "aurora";
         if (string.IsNullOrWhiteSpace(Ui.Accent)) Ui.Accent = "gold";
 
         Voice.WakeWord = string.IsNullOrWhiteSpace(Voice.WakeWord) ? "friday" : Voice.WakeWord.Trim();
+        Voice.FollowUpSeconds = Math.Clamp(Voice.FollowUpSeconds, 0, 600);
         Voice.TtsRate = Math.Clamp(Voice.TtsRate, -10, 10);
         Voice.TtsVolume = Math.Clamp(Voice.TtsVolume, 0, 100);
 
@@ -271,6 +310,51 @@ public sealed class FridayConfig
 
     public bool HasStoredKey => !string.IsNullOrWhiteSpace(Ai.ApiKeyProtected);
 
+    // ------------------------------------------------------------ relay identity
+
+    /// <summary>
+    /// Creates the laptop id and relay key on first use. The id is 128-bit random
+    /// routing information; the key is a separate 256-bit secret. Neither is
+    /// derived from the machine name or Windows account.
+    /// </summary>
+    public void EnsureRelayIdentity()
+    {
+        if (string.IsNullOrWhiteSpace(Relay.LaptopId))
+            Relay.LaptopId = "lap" + Convert.ToHexString(RandomNumberGenerator.GetBytes(10)).ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(Relay.KeyProtected))
+            Relay.KeyProtected = ProtectSecret(Base64Url(RandomNumberGenerator.GetBytes(32)));
+        Save();
+    }
+
+    public string EffectiveRelayKey()
+    {
+        var env = Environment.GetEnvironmentVariable("FRIDAY_RELAY_KEY");
+        if (!string.IsNullOrWhiteSpace(env)) return env.Trim();
+        if (string.IsNullOrWhiteSpace(Relay.KeyProtected)) return "";
+        try
+        {
+            var bytes = ProtectedData.Unprotect(
+                Convert.FromBase64String(Relay.KeyProtected), null, DataProtectionScope.CurrentUser);
+            return Encoding.UTF8.GetString(bytes).Trim();
+        }
+        catch (Exception ex)
+        {
+            FLog.Warn("config", "Stored relay key could not be decrypted: " + ex.Message);
+            return "";
+        }
+    }
+
+    /// <summary>Rotates the relay identity. Old relay sessions stop working.</summary>
+    public void RotateRelayIdentity()
+    {
+        Relay.LaptopId = "";
+        Relay.KeyProtected = "";
+        EnsureRelayIdentity();
+    }
+
+    private static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
     /// <summary>
     /// A deep copy used by the settings dialog so edits can be cancelled without
     /// touching the running assistant.
@@ -290,6 +374,7 @@ public sealed class FridayConfig
         Voice = other.Voice;
         Ui = other.Ui;
         Server = other.Server;
+        Relay = other.Relay;
         Policy = other.Policy;
         Startup = other.Startup;
         Privacy = other.Privacy;

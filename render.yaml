@@ -144,6 +144,22 @@ services:
           property: host
         format: https://%s
 
+  # Friday internet relay. Lets the phone reach the laptop assistant from mobile
+  # data or another Wi-Fi with no port forwarding. Zero npm dependencies.
+  - type: web
+    name: bonjee-friday-relay
+    runtime: node
+    plan: starter
+    rootDir: relay
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: RELAY_MAX_BODY_KB
+        value: "2048"
+
 databases:
   - name: bonjee-db
     plan: starter

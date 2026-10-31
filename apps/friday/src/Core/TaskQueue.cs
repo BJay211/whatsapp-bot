@@ -255,6 +255,7 @@ public sealed class TaskQueue
         task.Cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(
             Math.Clamp(_runtime.Config.Policy.MaxTaskSeconds, 30, 86400)));
         var token = task.Cancellation.Token;
+        var replySpoken = false;
 
         try
         {
@@ -288,6 +289,7 @@ public sealed class TaskQueue
             _runtime.Events.Publish("task", task.Id, "running", Clip(task.Instruction, 90));
 
             var reply = await _runtime.Brain.AskAsync(task.Instruction, context).ConfigureAwait(false);
+            replySpoken = reply.Spoken;
 
             if (token.IsCancellationRequested)
             {
@@ -327,7 +329,7 @@ public sealed class TaskQueue
                 task.Status.ToString().ToLowerInvariant(), Clip(task.Summary, 140));
             Save();
 
-            if (task.Status == TaskStatus.Succeeded && _runtime.Config.Privacy.SpeakReplies)
+            if (task.Status == TaskStatus.Succeeded && _runtime.Config.Privacy.SpeakReplies && !replySpoken)
                 _runtime.Voice.Speak(task.Summary);
         }
     }

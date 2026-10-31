@@ -49,8 +49,9 @@ Framework-dependent single file:
 ```
 
 `dist\friday.exe` then needs the .NET 10 Desktop Runtime on the target machine.
-A self-contained publish needs the runtime packs from NuGet, which is not
-available offline on this machine.
+The delivered build is copied to `dist\Friday-1.1.0.exe` so it does not overwrite
+an older working copy. A self-contained publish needs the runtime packs from
+NuGet, which is not available offline on this machine.
 
 ## Run
 
@@ -62,7 +63,7 @@ friday.exe --selftest      headless checks, writes %APPDATA%\Friday\logs\selftes
 friday.exe --netcheck      end-to-end TLS test on a throw-away home folder
 ```
 
-`--selftest` reports 34 checks and `--netcheck` 25; both exit 0 only when all
+`--selftest` reports 44 checks and `--netcheck` 25; both exit 0 only when all
 pass. `--netcheck` sets `FRIDAY_HOME` to a temp folder, so it does not touch your
 real config, devices or audit log.
 

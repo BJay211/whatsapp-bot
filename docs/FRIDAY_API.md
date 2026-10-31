@@ -8,12 +8,24 @@ implements exactly this.
 
 Base URL: `https://<laptop-ip>:8790` (default port 8790, TLS on by default).
 
+Across the internet the same routes are reached through the optional relay:
+
+```
+https://<relay-host>/r/<laptopId>/v1/...
+```
+
+Friday dials out to the relay, so the laptop needs no open port. Pairing uses
+`https://<relay-host>/v1/pair`, which broadcasts to the connected laptops and
+returns `relay_laptop` so the phone knows the route. The relay forwards only
+`/v1/` paths and still leaves every token and policy check to Friday.
+
 - Every route except `/v1/ping` and `/v1/pair` needs
   `Authorization: Bearer <device token>` (or `X-Friday-Token: <token>`).
 - Bodies are JSON. Responses are JSON with `"ok": true|false`.
-- The connection is TLS with a self-signed certificate. The phone pins the
-  certificate's SHA-256 at pairing time and refuses any other certificate
-  (`docs/FRIDAY_SECURITY.md`).
+- On the LAN the connection is TLS with a self-signed certificate, and the phone
+  pins its SHA-256 at pairing time (`docs/FRIDAY_SECURITY.md`). Through the relay
+  the hop uses the relay's publicly-trusted TLS; the laptop id plus the device
+  token identify the laptop and the caller.
 - Nothing here is a shell endpoint: `/v1/command` accepts a natural-language
   instruction, and Friday applies its own policy before anything runs.
 
@@ -43,7 +55,7 @@ Liveness and identity. Used before pairing and by "is it on?" checks.
 {
   "ok": true,
   "name": "Friday",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "protocol": "1.0",
   "machine": "TAVEH-LAPTOP",
   "tls": true,
@@ -76,9 +88,14 @@ Success (`200`):
   "token": "<random 32-byte token, base64url>",
   "fingerprint": "<SHA-256 of Friday's certificate>",
   "server_name": "Friday",
-  "protocol": "1.0"
+  "protocol": "1.0",
+  "relay_laptop": "lap0123456789abcdef"
 }
 ```
+
+`relay_laptop` is present only when the request came through the relay. The phone
+stores it and routes later calls to `/r/<relay_laptop>/v1/...`. It is optional for
+LAN-only clients, which keep using the pinned certificate.
 
 The phone stores the token and the fingerprint only after this response
 succeeds. Friday stores only `SHA-256(token)` on disk.
@@ -91,7 +108,7 @@ Machine state plus the six most recent tasks.
 {
   "ok": true,
   "name": "Friday",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "protocol": "1.0",
   "machine": "TAVEH-LAPTOP",
   "state": "idle",
@@ -116,7 +133,7 @@ Machine state plus the six most recent tasks.
   "text": "open Spotify and play my playlist",
   "request_id": "android-7f3c…",
   "client": "android",
-  "app_version": "3.4"
+  "app_version": "3.5"
 }
 ```
 

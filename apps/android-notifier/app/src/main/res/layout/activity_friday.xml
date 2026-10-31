@@ -123,6 +123,20 @@
                             android:textSize="12sp" />
                     </LinearLayout>
 
+                    <EditText
+                        android:id="@+id/editFridayRelayUrl"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:background="@color/bg_card_alt"
+                        android:hint="Relay URL (any network), e.g. https://…onrender.com"
+                        android:inputType="textUri"
+                        android:maxLines="1"
+                        android:padding="9dp"
+                        android:textColor="@color/text_primary"
+                        android:textColorHint="@color/text_dim"
+                        android:textSize="12sp" />
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

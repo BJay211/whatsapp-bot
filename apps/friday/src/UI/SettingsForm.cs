@@ -29,6 +29,7 @@ public sealed class SettingsForm : Form
     private readonly FridayRuntime _runtime;
     private readonly FridayConfig _draft;
     private readonly (bool Enabled, int Port, bool Lan, bool Tls) _serverBefore;
+    private readonly (bool Enabled, string Url, string LaptopId) _relayBefore;
     private readonly int _pairingMinutesBefore;
 
     private readonly Panel _host = new();
@@ -41,6 +42,7 @@ public sealed class SettingsForm : Form
     private Label _keyStatus = new();
     private ComboBox _voiceCombo = new();
     private Label _pairingCode = new();
+    private Label _relayIdLabel = new();
     private Label _pairingExpiry = new();
     private ListView _deviceList = new();
     private ListBox _rootList = new();
@@ -55,6 +57,8 @@ public sealed class SettingsForm : Form
         _draft = runtime.Config.Clone();
         _serverBefore = (runtime.Config.Server.Enabled, runtime.Config.Server.Port,
             runtime.Config.Server.AllowLan, runtime.Config.Server.UseTls);
+        _relayBefore = (runtime.Config.Relay.Enabled, runtime.Config.Relay.Url,
+            runtime.Config.Relay.LaptopId);
         _pairingMinutesBefore = runtime.Config.Server.PairingCodeMinutes;
 
         SuspendLayout();
@@ -159,7 +163,7 @@ public sealed class SettingsForm : Form
 
         var subtitle = new Label
         {
-            Text = "Friday 1.0  ·  changes apply when you save",
+            Text = "Friday 1.1  ·  changes apply when you save",
             AutoSize = true,
             Font = Theme.Ui(7.75f),
             ForeColor = Theme.Faint,
@@ -375,15 +379,19 @@ public sealed class SettingsForm : Form
 
         stack.Controls.Add(Section("SPEECH"));
         stack.Controls.Add(DarkCheck("Voice enabled", _draft.Voice.Enabled, v => _draft.Voice.Enabled = v));
-        stack.Controls.Add(DarkCheck("Listen for a wake word continuously", _draft.Voice.WakeWordEnabled,
+        stack.Controls.Add(DarkCheck("Voice first: always listen for the wake word", _draft.Voice.WakeWordEnabled,
             v => _draft.Voice.WakeWordEnabled = v));
         stack.Controls.Add(Pair("Wake word", DarkText(_draft.Voice.WakeWord, v => _draft.Voice.WakeWord = v),
             "Say \"Friday, open Chrome\". Push-to-talk (Ctrl+Alt+Space) works even with this off."));
+        stack.Controls.Add(Pair("Hands-free window (seconds)",
+            Number(0, 600, _draft.Voice.FollowUpSeconds, 5, v => _draft.Voice.FollowUpSeconds = (int)v),
+            "After a command the microphone keeps taking commands without the wake word. " +
+            "Every spoken phrase restarts the countdown; total silence returns to waiting for the wake word. 0 disables it."));
         stack.Controls.Add(DarkCheck("Keep the push-to-talk fallback", _draft.Voice.PushToTalk,
             v => _draft.Voice.PushToTalk = v));
         stack.Controls.Add(DarkCheck("Interrupt Friday when I start speaking", _draft.Voice.InterruptOnSpeech,
             v => _draft.Voice.InterruptOnSpeech = v));
-        stack.Controls.Add(DarkCheck("Listen again after a reply", _draft.Voice.AutoListenAfterReply,
+        stack.Controls.Add(DarkCheck("Keep the hands-free window open after a reply", _draft.Voice.AutoListenAfterReply,
             v => _draft.Voice.AutoListenAfterReply = v));
 
         stack.Controls.Add(Section("VOICE OUTPUT"));
@@ -423,6 +431,77 @@ public sealed class SettingsForm : Form
         var page = Page();
         var stack = Stack();
         page.Controls.Add(stack);
+
+        stack.Controls.Add(Section("INTERNET RELAY"));
+        stack.Controls.Add(DarkCheck("Reach this laptop from any network through the relay",
+            _draft.Relay.Enabled, v => _draft.Relay.Enabled = v));
+        stack.Controls.Add(Pair("Relay URL",
+            DarkText(_draft.Relay.Url, v => _draft.Relay.Url = v.Trim()),
+            "For example https://bonjee-friday-relay.onrender.com. Leave empty to use the local network only."));
+
+        _relayIdLabel = new Label
+        {
+            AutoSize = true,
+            Font = Theme.Mono(8.5f),
+            ForeColor = Theme.Gold,
+            BackColor = Color.Transparent,
+            Text = string.IsNullOrWhiteSpace(_draft.Relay.LaptopId)
+                ? "Generated when the relay is first saved."
+                : _draft.Relay.LaptopId,
+            Margin = new Padding(0, 2, 0, 4),
+        };
+        stack.Controls.Add(Pair("Laptop id", _relayIdLabel,
+            "The phone routes to this id. It is public; the relay key that proves ownership is stored encrypted."));
+
+        var relayRow = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 6),
+        };
+        var copyId = new FButton("COPY LAPTOP ID") { Width = 140, Height = 30, Compact = true };
+        copyId.Click += (_, _) =>
+        {
+            var id = _draft.Relay.LaptopId;
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                Toast("Save once with the relay enabled to generate the id.");
+                return;
+            }
+            Clipboard.SetText(id);
+            Toast("Laptop id copied. The phone also learns it automatically when pairing.");
+        };
+        var rotate = new FButton("NEW ID & KEY") { Width = 132, Height = 30, Compact = true, Margin = new Padding(8, 0, 0, 0) };
+        rotate.Click += (_, _) =>
+        {
+            _draft.Relay.LaptopId = "";
+            _draft.Relay.KeyProtected = "";
+            _relayIdLabel.Text = "A new identity will be generated when you save.";
+            Toast("Saving will replace the relay identity. Old relay sessions stop working.");
+        };
+        relayRow.Controls.Add(copyId);
+        relayRow.Controls.Add(rotate);
+        stack.Controls.Add(relayRow);
+
+        var relayState = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(700, 0),
+            ForeColor = Theme.Dim,
+            Font = Theme.Mono(8.5f),
+            BackColor = Color.Transparent,
+            Text = _runtime.Relay.StatusText +
+                   (_runtime.Config.Relay.Enabled
+                       ? "\nRelay key: " + (_runtime.Config.EffectiveRelayKey().Length > 0 ? "stored (encrypted)" : "missing")
+                       : ""),
+            Margin = new Padding(0, 0, 0, 6),
+        };
+        stack.Controls.Add(relayState);
+        stack.Controls.Add(Hint(
+            "The relay lets the phone work from mobile data or another Wi-Fi without port forwarding. " +
+            "Friday dials out; nothing on your router is opened. The phone still authenticates with its " +
+            "own device token on every request, and revoking it on this page still takes effect immediately."));
 
         stack.Controls.Add(Section("PHONE LINK"));
         stack.Controls.Add(DarkCheck("Run the phone service", _draft.Server.Enabled, v => _draft.Server.Enabled = v));
@@ -775,7 +854,7 @@ public sealed class SettingsForm : Form
             Margin = new Padding(0, 2, 0, 12),
         };
         info.Text =
-            "Version 1.0.0 (protocol 1.0)\r\n" +
+            "Version 1.1.0 (protocol 1.0)\r\n" +
             "Machine: " + Environment.MachineName + "  ·  user " + Environment.UserName + "\r\n" +
             "Data folder: " + AppPaths.Home + "\r\n" +
             "AI: " + (string.IsNullOrWhiteSpace(key)
@@ -1002,6 +1081,23 @@ public sealed class SettingsForm : Form
             return;
         }
 
+        if (_draft.Relay.Enabled)
+        {
+            if (!Uri.TryCreate(_draft.Relay.Url, UriKind.Absolute, out var relayUri) ||
+                relayUri.Scheme is not ("https" or "http"))
+            {
+                Toast("The relay URL must start with https:// (or http:// for local testing).");
+                return;
+            }
+            if (relayUri.Scheme == "http" &&
+                !relayUri.IsLoopback &&
+                !relayUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                Toast("Use https:// for a relay on the internet. The laptop's relay key would otherwise cross the network in clear text.");
+                return;
+            }
+        }
+
         try
         {
             _runtime.Config.CopyFrom(_draft);
@@ -1014,6 +1110,13 @@ public sealed class SettingsForm : Form
                 _serverBefore.Lan != after.AllowLan || _serverBefore.Tls != after.UseTls)
             {
                 _runtime.Server.Restart();
+            }
+
+            if (_relayBefore != (_runtime.Config.Relay.Enabled, _runtime.Config.Relay.Url,
+                    _runtime.Config.Relay.LaptopId))
+            {
+                _runtime.Relay.Stop();
+                _runtime.Relay.Start();
             }
 
             if (_pairingMinutesBefore != after.PairingCodeMinutes)

@@ -8,9 +8,9 @@ exercised.
 - Machine: Windows, 64-bit, .NET SDK `10.0.403`, .NET Desktop Runtime `10.0.12`.
 - Friday: `net10.0-windows`, Release, published framework-dependent single file
   `win-x64`.
-- Android: JARVIS 3.4 (`versionCode` 16), package `com.bonjee.notifier`, built
+- Android: JARVIS 3.5 (`versionCode` 17), package `com.bonjee.notifier`, built
   offline with AGP/SDK 34 and the debug keystore.
-- Date of these runs: 2026-10-28.
+- Date of these runs: 2026-10-30 to 2026-10-31.
 
 Everything here is reproducible with the two commands in
 [Reproducing](#7-reproducing-the-runs).
@@ -22,17 +22,21 @@ Everything here is reproducible with the two commands in
 | Area | Result |
 |---|---|
 | Friday build (Release) | **Pass** - 0 warnings, 0 errors |
-| `friday.exe --selftest` | **Pass** - 34 checks, 0 failures, exit code 0 |
-| `friday.exe --netcheck` | **Pass** - 25 checks, 0 failures, 31-32 requests, exit code 0 |
+| `friday.exe --selftest` | **Pass** - 44 checks, 0 failures, exit code 0 |
+| `friday.exe --netcheck` | **Pass** - 25 checks, 0 failures, 31 requests, exit code 0 |
+| Relay harness (`relay/test-relay.js`) | **Pass** - 10 checks, 0 failures |
+| Real relay end-to-end (`phone.js`) | **Pass** - 8 checks, 0 failures, 8+ requests forwarded |
+| Relay restart and reconnect | **Pass** - Friday re-registered and relaying resumed |
 | Desktop launch | **Pass** - window titled `FRIDAY` stays up, `/v1/ping` answers |
-| Local command latency | **19-23 ms** (was 137 ms) |
-| API command round trip | **32-38 ms** (was 163 ms) |
-| API command, 10-call median | **6-7 ms** (was 134 ms) |
+| Local command latency | **19-25 ms** |
+| API command round trip | **32-42 ms** |
+| API command, 10-call median | **7 ms** |
 | Connection reuse | **Pass** - second request on one socket, 4.3 ms |
 | Android debug build | **Pass** - `assembleDebug` |
 | Android release build | **Pass** - `assembleRelease`, APK inspected and signed |
 | Android on a real phone | **Not tested** - no device or emulator available |
 | AI provider round trip | **Not tested** - no API key on this machine |
+| Deployed relay / cross-network phone | **Not tested** - no hosted relay credentials here |
 | n8n / dashboard calls | **Not tested** - endpoints return 404 here |
 
 ---
@@ -53,6 +57,16 @@ PASS  blocked list refuses format
 PASS  unknown command is not auto-run
 PASS  download-and-execute is refused
 PASS  tool schema exposes core tools
+PASS  wake word extracts the instruction
+PASS  wake word ignores an unrelated sentence
+PASS  a bare wake word is recognised without a command
+PASS  voice-first defaults are on
+PASS  spoken dot extensions become real extensions
+PASS  a dropped dot is still understood
+PASS  app names resolve to a real executable, never a folder
+PASS  chrome resolves to chrome.exe, not a folder
+PASS  folder aliases resolve to real folders
+PASS  quick lookup finds a file on the Desktop
 PASS  TLS certificate loads with a private key
 PASS  TLS fingerprint is SHA-256
 PASS  pairing code creates a device token
@@ -97,6 +111,14 @@ approval is genuinely in the path (a denied command does not run); the emergency
 stop cancels work and releases; and each Access switch actually refuses its
 tools instead of only changing a checkbox.
 
+The voice tests are pure text checks, not microphone tests: the wake word parser
+extracts "open chrome" from "hey Friday, open chrome", ignores a sentence that
+does not name Friday, and recognises a bare "Friday" as an acknowledgement. Other
+checks prove that a spoken "dave dot text" becomes `dave.txt`, a missing dot is
+still understood, app names resolve to executables (Chrome to `chrome.exe`, never
+to a folder), folder aliases resolve to folders, and a Desktop filename can be
+found. None of that proves a phrase is recognised from audio.
+
 What it does **not** prove: any of this over a phone, through a firewall, or
 against a live AI provider.
 
@@ -135,12 +157,71 @@ PASS  emergency stop releases
 PASS  the phone can revoke its own device
 PASS  a revoked token stops working
 RESULT: all network checks passed
-requests served: 31-32
+requests served: 31
 ```
 
 The "different certificate is refused" check is the important one: it uses the
 phone's pinning logic and confirms a second, valid-but-wrong certificate is
 rejected **before** any token is sent.
+
+### 3.1 Relay harness
+
+`relay/test-relay.js` starts the real relay (`relay/server.js`) on a local port
+with a fake laptop that long-polls it. Ten checks, all passing:
+
+```
+PASS  health endpoint
+PASS  says the laptop is offline before it registers
+PASS  delivers a phone request to a long-polling laptop
+PASS  rejects a mismatched relay key after registration
+PASS  times out a laptop that does not answer, then stays clean
+PASS  refuses paths outside /v1/
+PASS  refuses an invalid laptop id
+PASS  pairs through the relay and reports relay_laptop
+PASS  limits pairing attempts per IP
+PASS  health never exposes keys or tokens
+```
+
+"What clean means" is specific: after a timeout the queued envelope is removed,
+so a late response cannot be delivered to a different request. Health reports
+only counts, never a key, a token or a pairing code.
+
+### 3.2 Real end-to-end: phone -> relay -> Friday -> relay -> phone
+
+The harness in `%TEMP%\friday-e2e` runs a **real** `FridayRuntime` against a real
+relay process on `127.0.0.1`, with a throw-away home folder and a relay key from
+the environment. `phone.js` then behaves as the Android client: it pairs, sends
+commands, polls, and revokes. Eight checks, all passing:
+
+```
+PASS relay sees the laptop online
+PASS paired through relay as <device id>
+PASS relayed ping
+PASS relayed authenticated status
+PASS relayed request with a wrong token is refused (401)
+PASS real command through relay: succeeded      ("system status")
+PASS duplicate request id did not run twice
+PASS revocation took effect through the relay
+All end-to-end checks passed (relay forwarded 8).
+```
+
+A separate restart check killed the relay, restarted it, and confirmed Friday
+re-registered (`online=1`) and a relayed `/v1/ping` returned `200` again. This is
+real traffic, not a mock, but all of it is on the loopback interface. It does not
+prove a phone on mobile data reaching a hosted relay.
+
+The published single-file build was also started with `--background` and answered
+a real `GET /v1/ping` from `curl -k`:
+
+```json
+{"ok":true,"name":"Friday","version":"1.1.0","protocol":"1.0",
+ "machine":"TAVEH-LAPTOP","tls":true,
+ "fingerprint":"9C617DEA6D73EB5DDB8C97636A49E0F3575DB4E462538E543773A642703778DB",
+ "paired_devices":0,"pairing_required":true,"emergency_stop":false}
+```
+
+That confirms the executable, the version string, TLS and the listener - not a
+phone handshake.
 
 ---
 
@@ -155,7 +236,7 @@ Reported by `--selftest` around the real `TaskQueue`:
 | Build | Time |
 |---|---|
 | Before this round of work | **137 ms** |
-| After | **19-23 ms** |
+| After | **19-25 ms** |
 
 The 137 ms was the old 120 ms polling loop in `WaitForAsync`: a command that
 finished in 8 ms still waited up to 120 ms for the next look. The wait is now
@@ -166,9 +247,9 @@ terminal state.
 
 | Measurement | Before | After |
 |---|---|---|
-| Command round trip (submit to answer) | 163 ms | **32-38 ms** |
-| Local command latency, median of 10 | 134 ms | **6-7 ms** |
-| Local command latency, best of 10 | 10 ms | **4-5 ms** |
+| Command round trip (submit to answer) | 163 ms | **32-42 ms** |
+| Local command latency, median of 10 | 134 ms | **7 ms** |
+| Local command latency, best of 10 | 10 ms | **5 ms** |
 
 Three changes account for that:
 
@@ -217,19 +298,20 @@ for one device (300 ms for 10 s is ~33 requests, then 75 per minute).
 Both variants build offline:
 
 ```
-BUILD SUCCESSFUL in 26s
-83 actionable tasks: 10 executed, 73 up-to-date
+BUILD SUCCESSFUL
 ```
 
 `aapt2 dump badging` on the release APK:
 
 ```
-package: name='com.bonjee.notifier' versionCode='16' versionName='3.4'
+package: name='com.bonjee.notifier' versionCode='17' versionName='3.5'
 uses-permission: name='android.permission.INTERNET'
 uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
 uses-permission: name='android.permission.POST_NOTIFICATIONS'
 uses-permission: name='android.permission.FOREGROUND_SERVICE'
 uses-permission: name='android.permission.FOREGROUND_SERVICE_DATA_SYNC'
+uses-permission: name='android.permission.FOREGROUND_SERVICE_MICROPHONE'
+uses-permission: name='android.permission.USE_FULL_SCREEN_INTENT'
 uses-permission: name='android.permission.RECORD_AUDIO'
 uses-permission: name='android.permission.CAMERA'
 uses-permission: name='android.permission.READ_CONTACTS'
@@ -238,6 +320,7 @@ uses-permission: name='android.permission.CALL_PHONE'
 uses-permission: name='android.permission.SEND_SMS'
 uses-permission: name='com.bonjee.notifier.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
 application-label:'JARVIS'
+launchable-activity: name='com.bonjee.notifier.ui.JarvisHomeActivity'
 ```
 
 `apksigner verify --print-certs`:
@@ -249,22 +332,26 @@ Signer #1 certificate SHA-256 digest: a1725c2f83b0692673d9ed740df3fd95a31e506e71
 
 | Property | Value |
 |---|---|
-| File | `JARVIS-3.4.apk` |
-| Size | 5,746,793 bytes |
-| SHA-256 | `921465A8B0D15B1183CB6CD4B24B05AB74C49B179963E94FF00A7BA9B0AD641B` |
+| File | `JARVIS-3.5.apk` |
+| Size | 5,789,866 bytes |
+| SHA-256 | `9FEAABE378E75506B7A01E825DACC5BF460BC1BDF9E824C2E7054090FF6EF87F` |
 | Package | `com.bonjee.notifier` (unchanged) |
-| Version | 3.4, code 16 (was 3.3, code 15) |
+| Version | 3.5, code 17 (was 3.4, code 16) |
 | Label | `JARVIS` (unchanged) |
 | Signing | **debug keystore** - see the warning below |
 
-**This is a debug-signed release build.** It is the same key used for 3.3, so it
-upgrades in place, but it is not Play-Store signing. Do not publish it; use it
-for your own phone. The permissions are identical to 3.3: nothing new was added
-for Friday.
+**This is a debug-signed release build.** It is the same key used for 3.3 and
+3.4, so it upgrades in place, but it is not Play-Store signing. Do not publish it;
+use it for your own phone. Two permissions are new in 3.5:
+`FOREGROUND_SERVICE_MICROPHONE` for the visible wake-listening service and
+`USE_FULL_SCREEN_INTENT` so a wake phrase can bring the conversation forward on
+Android 14.
 
 What was checked in the APK: package id, version, label, permission list, signer,
-`FridayActivity` present in the manifest, and `FridayClient` compiled into the
-dex. What was **not** checked: that it installs, that it launches, that it pairs.
+the launchable `JarvisHomeActivity`, `VoiceSettingsActivity` and
+`JarvisWakeService` in the manifest, and that the voice and relay classes are
+compiled into the dex. What was **not** checked: that it installs, that it
+launches, that a phrase is heard, that it speaks, or that it pairs.
 
 ---
 
@@ -272,33 +359,48 @@ dex. What was **not** checked: that it installs, that it launches, that it pairs
 
 Be sceptical of anything in this list until you have seen it work:
 
-1. **Android runtime.** No phone, emulator or `adb` was available. Pairing,
-   certificate pinning on a device, the Friday screen, voice input, approval
-   dialogs, cancel, adaptive polling and the Automations card were never
-   exercised. They compile and the code paths are unit-shaped, but that is all.
-2. **AI provider.** No `FRIDAY_AI_KEY`. The Groq/OpenAI path - including the new
-   gzip and pooled-connection changes - has never made a real request from this
-   build. The self-test explicitly reports `AI configured: no`.
+1. **Android runtime.** No phone, emulator or `adb` was available. The continuous
+   conversation, automatic restart, barge-in, wake-word foreground service,
+   Android TTS, voice settings, relay pairing, certificate pinning on a device,
+   the Friday screen, approval dialogs, cancel and adaptive polling were never
+   exercised on hardware. They compile and the laptop side is tested, but that is
+   all.
+2. **AI provider.** No `FRIDAY_AI_KEY` and no phone-side key. Neither Friday's
+   streaming client nor JARVIS's SSE answer path has made a real provider request
+   from this build. The self-test explicitly reports `AI configured: no`. Sentence
+   chunking and the fallback to non-streaming were exercised only through code and
+   unit-shaped checks.
 3. **Spoken audio.** Windows reports one recogniser and two TTS voices, and the
    app reports both "ready", but no microphone capture or playback was performed
-   in this environment. "Ready" means the engines loaded, not that a phrase was
-   understood.
+   in this environment. Android TTS was never heard on a device. "Ready" means
+   the engines loaded, not that a phrase was understood or spoken.
 4. **n8n / dashboard.** The JARVIS web endpoints return 404 from here, so the
    archive fallback is unverified.
-5. **Off-LAN access.** Not implemented and not tested. A private tunnel is your
-   configuration to make.
+5. **Deployed relay and cross-network access.** The relay passes its harness and a
+   real local end-to-end run, but no hosted relay was deployed from this machine
+   and no phone reached it over mobile data. That specific hop - phone on a
+   different network -> public TLS -> hosted relay -> laptop - is unverified.
+   `relay/README.md` and `render.yaml` are the deployment path.
 6. **Windows Firewall.** No rule for port 8790 was created by the build. The
    command is in `FRIDAY_SETUP.md`; whether the phone can reach the laptop on
-   your network is unverified.
+   your network is unverified. Relay mode needs no inbound rule.
 7. **TLS pinning against an active attacker.** The logic is tested with a second
    certificate in `--netcheck`, but not against a proxy or a real interception.
+   Relay mode deliberately does not pin the laptop certificate; it relies on the
+   relay's public TLS plus the device token.
 8. **Long-running tasks, sleep/resume, network loss mid-task.** The design
-   handles them (202 + task id, idempotent request ids), but they were not
-   rehearsed over a real link.
+   handles them (202 + task id, idempotent request ids, reconnect with backoff),
+   and a relay restart was tested locally, but phone network loss mid-command was
+   not rehearsed.
 9. **Retention pruning.** `FLog.PruneOlderThan` runs at startup and was exercised
    by code inspection and a startup log line, not by seeding 91-day-old records.
-10. **Upgrade in place.** 3.3 â†’ 3.4 uses the same package and signer, so it
-    should upgrade; it was not installed over 3.3 on a device.
+10. **Upgrade in place.** 3.5 uses the same package and signer as 3.4, so it
+    should upgrade; it was not installed over 3.4 on a device.
+11. **Wake phrase in the background.** `JarvisWakeService` is a real microphone
+    foreground service with a visible notification, but Android's battery
+    optimisers, OEM task killers and microphone-access rules vary by device. It
+    was not run on a phone, so no claim is made that it survives every OEM's
+    background limits.
 
 ---
 
@@ -308,7 +410,7 @@ Be sceptical of anything in this list until you have seen it work:
 cd apps\friday
 .\.toolchain\dotnet\dotnet.exe build Friday.csproj -c Release -v minimal
 
-# 34 checks, writes %APPDATA%\Friday\logs\selftest.txt
+# 44 checks, writes %APPDATA%\Friday\logs\selftest.txt
 .\bin\Release\net10.0-windows\friday.exe --selftest
 
 # 25 checks on a throw-away TLS server, does not touch your real data
@@ -318,6 +420,18 @@ cd apps\friday
 Both exit with code 0 only when every check passes. The latency lines are
 `local command latency:` (selftest) and `command round trip:` /
 `local command latency over 10 calls:` (netcheck).
+
+The relay harness is self-contained:
+
+```powershell
+cd relay
+node test-relay.js
+```
+
+It prints ten `PASS` lines and exits 0. The end-to-end run used an ad-hoc harness
+in `%TEMP%\friday-e2e` (`Harness.csproj` hosting a real `FridayRuntime`, plus
+`phone.js`) against a relay on `127.0.0.1:8877`; it is evidence from this machine,
+not a committed test suite.
 
 For the Android build:
 
@@ -336,14 +450,19 @@ Verify the APK with `build-tools\34.0.0\aapt2.exe dump badging` and
 
 ## 8. Honest bottom line
 
-The laptop half is tested: builds clean, 34 + 25 checks pass, and the phone
-protocol works end to end over real TLS on loopback, including pinning, pairing,
-idempotency, approvals, emergency stop and revocation. The response-time work is
-measured, not estimated: 137 â†’ ~20 ms in-process and 163 â†’ ~35 ms over the wire,
-with a 6 ms median for a warm connection.
+The laptop half is tested: builds clean, 44 + 25 checks pass, the relay passes 10
+harness checks, and a real relay -> Friday -> task round trip passes 8 end-to-end
+checks including pairing, authentication, idempotency, revocation and reconnect.
+The response-time work is measured, not estimated: ~20 ms in-process and ~35 ms
+over the wire, with a 7 ms median for a warm connection.
 
-The phone half is **built, not run**. The AI half is **wired, not called**. Those
-are the two things to try first on your own hardware, and the two places where a
-surprise is still possible.
+The phone half is **built, not run on a phone**. The AI path is **wired, not
+called against a provider**. The relay is **real code with local proof, not a
+deployed service reached from mobile data**. Those are the three things to try
+first on your own hardware, and the three places where a surprise is still
+possible.
+
+Nothing above should be read as "it works on your phone". Pair it once, speak to
+it once, and use it from mobile data once before trusting it.
 
 

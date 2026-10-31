@@ -46,9 +46,10 @@ class FridayActivity : AppCompatActivity() {
         bindButtons()
 
         binding.txtFridayFooter.text =
-            "The connection is TLS and pinned to Friday's certificate, so a look-alike " +
-                "server on the same Wi-Fi is refused. Approvals are still decided by Friday: " +
-                "if remote approval is off on the laptop, this phone can only watch."
+            "On the same Wi-Fi the connection is TLS and pinned to Friday's certificate. With a " +
+                "relay URL it uses the relay's own TLS from any network, and Friday still " +
+                "authenticates this phone with its device token. Approvals are always decided by " +
+                "Friday: if remote approval is off on the laptop, this phone can only watch."
     }
 
     override fun onResume() {
@@ -62,6 +63,7 @@ class FridayActivity : AppCompatActivity() {
         binding.switchFridayEnabled.isChecked = prefs.fridayEnabled
         binding.editFridayHost.setText(prefs.fridayHost)
         binding.editFridayPort.setText(prefs.fridayPort.toString())
+        binding.editFridayRelayUrl.setText(prefs.fridayRelayUrl)
         binding.editFridayPrefix.setText(prefs.fridayInvokePrefix)
         binding.editFridayCode.setText("")
         binding.txtFridayPairing.text = if (prefs.fridayToken.isBlank()) {
@@ -72,10 +74,15 @@ class FridayActivity : AppCompatActivity() {
                 if (prefs.fridayPairedAt > 0) {
                     appendLine("paired " + stamp.format(Date(prefs.fridayPairedAt)))
                 }
-                append(
-                    "certificate " +
-                        if (prefs.fridayFingerprint.isBlank()) "(not pinned yet)" else "pinned",
-                )
+                if (prefs.fridayUseRelay()) {
+                    appendLine("routes through the relay as ${prefs.fridayRelayLaptop}")
+                    append("certificate: relay's own TLS")
+                } else {
+                    append(
+                        "certificate " +
+                            if (prefs.fridayFingerprint.isBlank()) "(not pinned yet)" else "pinned",
+                    )
+                }
             }
         }
     }
@@ -101,6 +108,7 @@ class FridayActivity : AppCompatActivity() {
         prefs.fridayHost = binding.editFridayHost.text?.toString().orEmpty()
         val port = binding.editFridayPort.text?.toString()?.trim()?.toIntOrNull()
         if (port != null) prefs.fridayPort = port
+        prefs.fridayRelayUrl = binding.editFridayRelayUrl.text?.toString().orEmpty()
         prefs.fridayInvokePrefix = binding.editFridayPrefix.text?.toString().orEmpty()
         prefs.fridayEnabled = binding.switchFridayEnabled.isChecked
     }
@@ -117,14 +125,19 @@ class FridayActivity : AppCompatActivity() {
             appendLine("address: " + base.ifEmpty { "(not set)" })
             appendLine("state: $state")
             appendLine("wake word: \"${prefs.fridayInvokePrefix}\"")
-            val fingerprint = prefs.fridayFingerprint
-            append(
-                "certificate: " + if (fingerprint.isBlank()) {
-                    "not pinned"
-                } else {
-                    fingerprint.take(16) + "…" + fingerprint.takeLast(8)
-                },
-            )
+            if (prefs.fridayUseRelay()) {
+                appendLine("relay laptop: ${prefs.fridayRelayLaptop}")
+                append("certificate: relay's own TLS (no pin)")
+            } else {
+                val fingerprint = prefs.fridayFingerprint
+                append(
+                    "certificate: " + if (fingerprint.isBlank()) {
+                        "not pinned"
+                    } else {
+                        fingerprint.take(16) + "…" + fingerprint.takeLast(8)
+                    },
+                )
+            }
             if (prefs.fridayLastOkAt > 0) {
                 append(" · last success " + stamp.format(Date(prefs.fridayLastOkAt)))
             }
@@ -135,9 +148,18 @@ class FridayActivity : AppCompatActivity() {
 
     private fun testConnection() {
         saveSettings()
-        if (prefs.fridayHost.isBlank()) {
+        if (prefs.fridayHost.isBlank() && prefs.fridayRelayUrl.isBlank()) {
             binding.txtFridayLive.text =
-                "Enter the laptop's address first (Friday > Settings shows it)."
+                "Enter the laptop's address, or a relay URL, first (Friday > Settings shows both)."
+            return
+        }
+        if (prefs.fridayRelayUrl.isNotBlank() && prefs.fridayRelayLaptop.isBlank()) {
+            binding.txtFridayLive.setTextColor(
+                ContextCompat.getColor(this@FridayActivity, R.color.text_secondary),
+            )
+            binding.txtFridayLive.text =
+                "Relay URL saved. Pair once through it and this phone learns the laptop id, then " +
+                    "the relay works from any network."
             return
         }
         if (busy) return
@@ -158,7 +180,8 @@ class FridayActivity : AppCompatActivity() {
             binding.txtFridayLive.setTextColor(
                 ContextCompat.getColor(this@FridayActivity, R.color.green_bright),
             )
-            val mismatch = prefs.fridayFingerprint.isNotBlank() &&
+            val mismatch = !prefs.fridayUseRelay() &&
+                prefs.fridayFingerprint.isNotBlank() &&
                 value.fingerprint.isNotBlank() &&
                 !value.fingerprint.equals(prefs.fridayFingerprint, ignoreCase = true)
 
@@ -190,8 +213,8 @@ class FridayActivity : AppCompatActivity() {
     private fun pair() {
         saveSettings()
         val code = binding.editFridayCode.text?.toString().orEmpty()
-        if (prefs.fridayHost.isBlank()) {
-            binding.txtFridayPairing.text = "Enter the laptop's address above first."
+        if (prefs.fridayHost.isBlank() && prefs.fridayRelayUrl.isBlank()) {
+            binding.txtFridayPairing.text = "Enter the laptop's address or a relay URL above first."
             return
         }
         if (code.replace("-", "").trim().length != 8) {
@@ -200,7 +223,7 @@ class FridayActivity : AppCompatActivity() {
         }
         if (busy) return
         busy = true
-        binding.txtFridayPairing.text = "Pairing with ${prefs.fridayBaseUrl()} ..."
+        binding.txtFridayPairing.text = "Pairing with ${prefs.fridayPairingBaseUrl()} ..."
         val name = prefs.deviceName
         lifecycleScope.launch {
             val paired = withContext(Dispatchers.IO) {
@@ -221,8 +244,16 @@ class FridayActivity : AppCompatActivity() {
             )
             binding.txtFridayPairing.text = buildString {
                 appendLine("Paired as ${value.deviceName}.")
-                appendLine("certificate pinned: " + value.fingerprint.ifBlank { "(not reported)" })
-                append("Compare that with Friday > Settings > Phone on the laptop.")
+                if (prefs.fridayUseRelay()) {
+                    appendLine("Route: internet relay as ${prefs.fridayRelayLaptop}")
+                    append(
+                        "Works from mobile data or any Wi-Fi. Friday still checks this phone's " +
+                            "own device token on every request.",
+                    )
+                } else {
+                    appendLine("certificate pinned: " + value.fingerprint.ifBlank { "(not reported)" })
+                    append("Compare that with Friday > Settings > Phone on the laptop.")
+                }
             }
             loadSettings()
             refreshLocalStatus()

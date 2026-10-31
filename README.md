@@ -111,18 +111,34 @@ See [`apps/android-notifier/README.md`](./apps/android-notifier/README.md).
   **Automations → AI Assistant**. General questions then go straight to that provider
   instead of n8n; if it fails, the app shows why and falls back to the archive.
 
-3.4 adds **Friday**, the laptop half of the assistant: a native Windows app with
+3.4 added **Friday**, the laptop half of the assistant: a native Windows app with
 its own voice, tools and encrypted phone link. The phone keeps every 3.3 feature;
 Friday is an extra destination for commands you address to it by name.
 
-- **Friday on the laptop** - run `apps\friday\dist\friday.exe` (or the copy on the
-  Desktop). It needs the .NET 10 Desktop Runtime. See
-  [`docs/FRIDAY_SETUP.md`](./docs/FRIDAY_SETUP.md) for install, pairing and the
-  first five minutes.
-- **Friday on the phone** - **Automations → FRIDAY (LAPTOP ASSISTANT)**, or
-  **PAIR OR OPEN FRIDAY**. Type the laptop address, compare the SHA-256
-  fingerprint, then enter the eight-character pairing code. The phone pins the
-  certificate; a different certificate is refused.
+3.5 turns both halves into a conversation and makes the link work away from home.
+
+- **JARVIS is voice-first.** One tap opens a continuous conversation: JARVIS
+  listens, answers aloud, and keeps listening for a follow-up for 30 seconds
+  without another tap. Speak while it is talking and it stops and handles the
+  correction. The wake phrases **"Hey JARVIS"**, **"JARVIS"**, **"Little help
+  here, JARVIS"** and **"JARVIS, you up?"** start it from the visible
+  notification; the microphone service is a foreground service, not a hidden
+  listener. See [`docs/FRIDAY_SETUP.md`](./docs/FRIDAY_SETUP.md).
+- **Voice settings** - pick the voice, rate and pitch, turn the wake service on
+  or off, and hear a real test sentence from **JARVIS → Voice**.
+- **Friday on the laptop** - run `apps\friday\dist\Friday-1.1.0.exe` (or the
+  Desktop copy). It needs the .NET 10 Desktop Runtime. Friday stays hands-free
+  for 30 seconds after "Friday", speaks sentences as they are written, and keeps
+  local context. See [`docs/FRIDAY_SETUP.md`](./docs/FRIDAY_SETUP.md).
+- **Friday on the phone** - the Friday screen takes either the LAN address
+  (`192.168.1.20`, port 8790) or an internet relay URL. Compare the SHA-256
+  fingerprint on the LAN, enter the eight-character code, and pair once. On the
+  LAN the certificate is pinned; through the relay the laptop id plus the device
+  token identify the laptop.
+- **Away from home** - deploy `relay/` with `render.yaml`, enable **Settings >
+  Phone > Internet relay** on the laptop, and paste the same URL on the phone.
+  No port forwarding, no router change. The relay forwards only `/v1/` traffic
+  and keeps no keys, tokens or command logic.
 - **Routing** - a command that starts with the wake word ("Friday, open Spotify")
   or names the laptop ("what is my laptop's battery") goes to Friday. Everything
   else stays a normal JARVIS question. Phone-only commands (torch, calls, alarms)
@@ -132,14 +148,17 @@ Friday is an extra destination for commands you address to it by name.
   `Ctrl+Alt+Esc` / the phone's **EMERGENCY STOP** cancels everything. Details:
   [`docs/FRIDAY_SECURITY.md`](./docs/FRIDAY_SECURITY.md) and the protocol in
   [`docs/FRIDAY_API.md`](./docs/FRIDAY_API.md).
-- **What was actually tested** - 34 self-test + 25 network checks pass; the
-  Android side is built and inspected but has not been run on a phone, and no AI
-  key was available. Read [`docs/FRIDAY_TESTING.md`](./docs/FRIDAY_TESTING.md)
-  before trusting it with anything important.
+- **What was actually tested** - 44 self-test, 25 network, 10 relay-harness and
+  8 real relay end-to-end checks pass. The Android side is built and inspected
+  but has not been run on a phone; no AI key was available; no hosted relay was
+  reached from mobile data. Read
+  [`docs/FRIDAY_TESTING.md`](./docs/FRIDAY_TESTING.md) before trusting it with
+  anything important.
 
-The release APK is `apps\android-notifier\dist\JARVIS-3.4.apk` (`versionCode`
-16, package `com.bonjee.notifier` unchanged, debug-signed). Friday's source is in
-[`apps/friday`](./apps/friday).
+The release APK is `apps\android-notifier\dist\JARVIS-3.5.apk` (`versionCode`
+17, package `com.bonjee.notifier` unchanged, debug-signed). Friday's source is in
+[`apps/friday`](./apps/friday); the new build is
+`apps\friday\dist\Friday-1.1.0.exe`.
 
 ```powershell
 cd "apps\android-notifier"

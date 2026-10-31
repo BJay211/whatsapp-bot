@@ -1,0 +1,14 @@
+{
+  "name": "bonjee-friday-relay",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Outbound long-poll relay for the Friday laptop assistant",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test-relay.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

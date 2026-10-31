@@ -15,6 +15,7 @@ using Friday.Core;
 using Friday.Net;
 using Friday.Security;
 using Friday.Tools;
+using Friday.Voice;
 using TaskStatus = Friday.Core.TaskStatus;
 
 namespace Friday;
@@ -97,9 +98,80 @@ public static class SelfTest
         Check("tool schema exposes core tools", () =>
         {
             var names = registry.All.Select(t => t.Name).ToHashSet();
-            return names.Contains("open_app") && names.Contains("run_command") &&
-                   names.Contains("screenshot") && names.Contains("system_status") &&
-                   names.Contains("web_search") && names.Contains("remember");
+            return names.Contains("open_app") && names.Contains("open_target") &&
+                   names.Contains("run_command") && names.Contains("screenshot") &&
+                   names.Contains("system_status") && names.Contains("web_search") &&
+                   names.Contains("remember");
+        });
+
+        Check("wake word extracts the instruction", () =>
+            WakeWord.TryExtract("Friday, open Chrome", "friday", out var wakeCommand) &&
+            wakeCommand.Equals("open Chrome", StringComparison.OrdinalIgnoreCase));
+
+        Check("wake word ignores an unrelated sentence", () =>
+            !WakeWord.TryExtract("the weather is nice today", "friday", out _));
+
+        Check("a bare wake word is recognised without a command", () =>
+            WakeWord.TryExtract("Hey Friday", "friday", out var bare) && bare.Length == 0);
+
+        Check("voice-first defaults are on", () =>
+        {
+            var voice = new VoiceConfig();
+            return voice.WakeWordEnabled && voice.FollowUpSeconds == 30 && voice.AutoListenAfterReply;
+        });
+
+        Check("spoken dot extensions become real extensions", () =>
+            AppTools.NormaliseSpokenTarget("dave dot text") == "dave.txt" &&
+            AppTools.NormaliseSpokenTarget("notes dot pdf") == "notes.pdf");
+
+        Check("a dropped dot is still understood", () =>
+            AppTools.NormaliseSpokenTarget("dave text") == "dave.txt");
+
+        Check("app names resolve to a real executable, never a folder", () =>
+        {
+            var resolved = AppTools.ResolveLaunch("notepad");
+            return resolved is not null && resolved.Path.EndsWith("notepad.exe", StringComparison.OrdinalIgnoreCase) &&
+                   File.Exists(resolved.Path);
+        });
+
+        var chromePath = Environment.ExpandEnvironmentVariables(
+            @"%ProgramFiles%\Google\Chrome\Application\chrome.exe");
+        if (File.Exists(chromePath))
+        {
+            Check("chrome resolves to chrome.exe, not a folder", () =>
+            {
+                var resolved = AppTools.ResolveLaunch("chrome");
+                return resolved is not null &&
+                       resolved.Path.Equals(chromePath, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+        else
+        {
+            Info("Chrome is not installed at the usual path; the app-name check above used Notepad.");
+        }
+
+        Check("folder aliases resolve to real folders", () =>
+        {
+            var downloads = AppTools.FolderAlias("my downloads");
+            return downloads is not null && downloads.EndsWith("Downloads", StringComparison.OrdinalIgnoreCase) &&
+                   Directory.Exists(downloads);
+        });
+
+        Check("quick lookup finds a file on the Desktop", () =>
+        {
+            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            var name = "friday-index-" + Guid.NewGuid().ToString("n")[..8] + ".txt";
+            var path = Path.Combine(desktop, name);
+            File.WriteAllText(path, "index probe");
+            try
+            {
+                var hit = QuickIndex.FindFile(config.Policy.FileRoots, name);
+                return hit is not null && hit.Equals(path, StringComparison.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                try { File.Delete(path); } catch { }
+            }
         });
 
         var identity = ServerIdentity.LoadOrCreate();

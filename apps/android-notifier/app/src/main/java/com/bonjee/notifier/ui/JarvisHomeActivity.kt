@@ -3,7 +3,6 @@ package com.bonjee.notifier.ui
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.speech.RecognizerIntent
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.AnimationUtils
@@ -20,29 +19,12 @@ import com.bonjee.notifier.databinding.ActivityJarvisHomeBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Locale
 
 class JarvisHomeActivity : AppCompatActivity() {
     
     private lateinit var binding: ActivityJarvisHomeBinding
     private lateinit var prefs: Prefs
     private var isVoiceMode = true
-    
-    private val speechRecognizerLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val data = result.data
-            val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val spokenText = results?.get(0) ?: ""
-            if (spokenText.isNotEmpty()) {
-                val intent = Intent(this, AskActivity::class.java)
-                intent.putExtra("query", spokenText)
-                startActivity(intent)
-            }
-        }
-        stopVoiceAnimation()
-    }
 
     /** Android 10+ assistant role dialog opened from the drawer. */
     private val assistantRoleLauncher = registerForActivityResult(
@@ -96,16 +78,25 @@ class JarvisHomeActivity : AppCompatActivity() {
 
         showOverKeyguard()
 
-        // Make sure the voice card is the one on screen before the recogniser opens.
-        isVoiceMode = true
-        binding.voiceInputCard.visibility = View.VISIBLE
-        binding.textInputCard.visibility = View.GONE
+        // The conversation screen owns the microphone now. Starting it from the
+        // home activity is deliberate: the one-shot RecognizerIntent dialog has
+        // no context, no follow-up and no spoken reply.
+        openAssistant(listenNow = true)
+    }
 
-        // Wait for the window to be attached; launching the recogniser straight
-        // from onCreate makes some OEM builds drop the dialog.
-        binding.root.post {
-            if (!isFinishing) startVoiceRecognition()
+    /** Opens the continuous conversation surface, optionally listening at once. */
+    private fun openAssistant(
+        listenNow: Boolean = false,
+        query: String? = null,
+        wakeText: String? = null,
+    ) {
+        val intent = Intent(this, AskActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            if (listenNow) putExtra(AskActivity.EXTRA_START_LISTENING, true)
+            if (!query.isNullOrBlank()) putExtra(AskActivity.EXTRA_QUERY, query)
+            if (!wakeText.isNullOrBlank()) putExtra(AskActivity.EXTRA_WAKE_TEXT, wakeText)
         }
+        startActivity(intent)
     }
 
     private fun showOverKeyguard() {
@@ -191,18 +182,16 @@ class JarvisHomeActivity : AppCompatActivity() {
             binding.btnModeVoice.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
         
-        // Voice input
+        // Voice input opens the continuous conversation, not a one-shot dialog.
         binding.btnVoice.setOnClickListener {
-            startVoiceRecognition()
+            openAssistant(listenNow = true)
         }
         
         // Text send
         binding.btnSpeak.setOnClickListener {
-            val query = binding.editQuery.text.toString()
+            val query = binding.editQuery.text.toString().trim()
             if (query.isNotEmpty()) {
-                val intent = Intent(this, AskActivity::class.java)
-                intent.putExtra("query", query)
-                startActivity(intent)
+                openAssistant(query = query)
                 binding.editQuery.setText("")
             } else {
                 Toast.makeText(this, "Please enter a command", Toast.LENGTH_SHORT).show()
@@ -217,7 +206,7 @@ class JarvisHomeActivity : AppCompatActivity() {
                     // Already on home
                 }
                 R.id.nav_ask -> {
-                    startActivity(Intent(this, AskActivity::class.java))
+                    openAssistant(listenNow = true)
                 }
                 R.id.nav_memory -> {
                     startActivity(Intent(this, MemoryActivity::class.java))
@@ -239,6 +228,9 @@ class JarvisHomeActivity : AppCompatActivity() {
                 }
                 R.id.nav_ai -> {
                     startActivity(Intent(this, AiSettingsActivity::class.java))
+                }
+                R.id.nav_voice -> {
+                    startActivity(Intent(this, VoiceSettingsActivity::class.java))
                 }
                 R.id.nav_devices -> {
                     startActivity(Intent(this, MessageSettingsActivity::class.java))
@@ -294,48 +286,6 @@ class JarvisHomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun startVoiceRecognition() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to JARVIS...")
-        }
-        try {
-            startVoiceAnimation()
-            speechRecognizerLauncher.launch(intent)
-        } catch (e: Exception) {
-            Toast.makeText(this, "Voice recognition not available", Toast.LENGTH_SHORT).show()
-            stopVoiceAnimation()
-        }
-    }
-    
-    private fun startVoiceAnimation() {
-        binding.waveformContainer.visibility = View.VISIBLE
-        binding.wave1.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim))
-        binding.wave2.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim2))
-        binding.wave3.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim3))
-        binding.wave4.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim))
-        binding.wave5.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim2))
-        binding.wave6.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim3))
-        binding.wave7.startAnimation(AnimationUtils.loadAnimation(this, R.anim.wave_anim))
-        binding.txtStatus.text = "LISTENING..."
-        binding.txtStatus.setTextColor(ContextCompat.getColor(this, R.color.orange))
-    }
-    
-    private fun stopVoiceAnimation() {
-        binding.waveformContainer.visibility = View.GONE
-        binding.wave1.clearAnimation()
-        binding.wave2.clearAnimation()
-        binding.wave3.clearAnimation()
-        binding.wave4.clearAnimation()
-        binding.wave5.clearAnimation()
-        binding.wave6.clearAnimation()
-        binding.wave7.clearAnimation()
-        binding.txtStatus.text = "ONLINE • READY"
-        binding.txtStatus.setTextColor(ContextCompat.getColor(this, R.color.green))
-        refreshConnectionStatus()
-    }
-    
     override fun onBackPressed() {
         if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
             binding.drawerLayout.closeDrawer(GravityCompat.START)

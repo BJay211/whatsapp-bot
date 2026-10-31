@@ -26,6 +26,7 @@ public sealed class FridayRuntime : IDisposable
     public TaskQueue Tasks { get; }
     public VoiceEngine Voice { get; }
     public FridayServer Server { get; }
+    public RelayClient Relay { get; }
 
     public bool EmergencyStopped { get; private set; }
     public string? LastProjectPath { get; set; }
@@ -43,6 +44,7 @@ public sealed class FridayRuntime : IDisposable
         Tasks = new TaskQueue(this);
         Voice = new VoiceEngine(config, State);
         Server = new FridayServer(this);
+        Relay = new RelayClient(this);
 
         Conversation.Added += entry =>
         {
@@ -65,6 +67,11 @@ public sealed class FridayRuntime : IDisposable
         Voice.Initialize();
         Tasks.Start();
         Server.Start();
+        Relay.Start();
+
+        // Warm the file/folder index in the background so the first "open ..."
+        // is answered quickly without ever blocking startup.
+        QuickIndex.Warm(Paths.Roots);
 
         var key = Config.EffectiveApiKey(out var source);
         FLog.Info("app", string.IsNullOrWhiteSpace(key)
@@ -114,6 +121,7 @@ public sealed class FridayRuntime : IDisposable
 
     public void Dispose()
     {
+        try { Relay.Dispose(); } catch { }
         try { Server.Dispose(); } catch { }
         try { Tasks.StopAsync().GetAwaiter().GetResult(); } catch { }
         try { Voice.Dispose(); } catch { }

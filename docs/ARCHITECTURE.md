@@ -29,7 +29,7 @@ graph TD
 | Android Notifier App | Uses `NotificationListenerService` to grab all notifications and POST them to n8n | Sideloaded APK onto your Android device |
 | Next.js Dashboard | View latest brief, deadlines, action items, timeline, and settings | Render Web Service/Static Site | 
 | Laptop agent (`laptop-agent/`) | Runs named commands on your own computer when the phone asks | Your PC, same Wi-Fi |
-| Friday (`apps/friday`) | Native Windows assistant: voice, tools, files/apps, encrypted phone link | Your PC, same Wi-Fi |
+| Friday (`apps/friday`) | Native Windows assistant: voice, tools, files/apps, encrypted phone link, optional internet relay | Your PC, same Wi-Fi or outbound relay |
 | AI provider (Groq by default) | Answers general questions with your own key and model | Third-party HTTPS API |
 
 ## Phone Commands (offline)
@@ -126,16 +126,26 @@ Safety is layered: the app is off by default, the address and token must be set,
 agent is in allowlist mode by default, and the app asks for approval by default. Raw
 PowerShell needs both sides to opt in.
 
-## Friday (laptop assistant, 3.4)
+## Friday and JARVIS voice (3.5)
 
 Friday is the second laptop channel and the one that is meant to last. The older
 `laptop-agent/` remains for compatibility, but Friday is a real agent rather than a
 command relay: it owns the microphone, speakers, files and applications, keeps its own
-task queue, and can answer locally with no network and no key.
+task queue, and can answer locally with no network and no key. On the phone, JARVIS 3.5
+is a continuous spoken conversation rather than a one-shot recogniser.
 
 ```
-JARVIS 3.4 (phone)
-  ├─ FridayClient          pinned TLS, per-device token, protocol 1.0
+JARVIS 3.5 (phone)
+  ├─ AskActivity / VoiceConversation   one session: listen, answer, keep listening
+  │    ├─ SpeechRecognizer             native, automatic restart, barge-in
+  │    ├─ SpeechOutput + TextToSpeech  sentence queue, voice/rate/pitch, hard stop
+  │    ├─ ConversationStore            last six exchanges, private prefs
+  │    └─ SentenceBuffer               streamed text -> complete sentences to speak
+  ├─ JarvisWakeService                 microphone foreground service + notification
+  │    └─ wake phrases                 "Hey JARVIS", "JARVIS", "Little help here,
+  │                                     JARVIS", "JARVIS, you up?"
+  ├─ FridayClient                      per-device token, protocol 1.0
+  │    ├─ LAN: pinned TLS                          ├─ relay: laptop id + token
   │    ├─ GET  /v1/ping              unauthenticated discovery + fingerprint
   │    ├─ POST /v1/pair              eight-character single-use code
   │    ├─ POST /v1/command           natural language; 200 result or 202 + task id
@@ -144,19 +154,23 @@ JARVIS 3.4 (phone)
   │    ├─ POST /v1/tasks/{id}/cancel
   │    ├─ POST /v1/stop              emergency stop (423 while engaged)
   │    └─ POST /v1/devices/revoke
-  └─ AskActivity routing: wake word ("Friday, ...") or an explicit laptop reference
-       ↓ same Wi-Fi, TLS 1.2/1.3
-  friday.exe :8790
+  └─ routing: wake word ("Friday, ...") or an explicit laptop reference
+       ↓ same Wi-Fi, TLS 1.2/1.3          ↓ different network, outbound long poll
+  friday.exe :8790                    relay (relay/server.js)
        ├─ FridayServer        request validation, idempotency, rate limit, keep-alive
+       ├─ RelayClient         outbound poll, re-register, /v1/ only
        ├─ TaskQueue           single worker, approvals, cancellation, event-driven waits
        ├─ Orchestrator        local intents first, then an OpenAI-compatible model
        │    └─ ToolRegistry   capability + risk gate on every call
-       ├─ VoiceEngine         System.Speech in and out, push-to-talk, optional wake word
+       ├─ VoiceEngine         System.Speech in and out, wake word, streamed speech
        └─ MainForm            animated core, transcript, task progress, approval card
 ```
 
 Design points that matter:
 
+- **Voice is a session, not a button.** The phone keeps the recogniser open for a
+  follow-up window, restarts it after Android ends it, and can capture speech while
+  TTS is talking. Echo-filtered stop phrases end it cleanly.
 - **The model cannot act directly.** It returns tool calls; the registry re-checks each
   one against the same policy a typed command uses, and the person sees an approval card
   for anything `Confirm` or `Destructive`.
@@ -168,6 +182,9 @@ Design points that matter:
 - **One TLS session per polling run.** The server keeps HTTP/1.1 connections open, so a
   phone poll does not pay for a handshake every time. See `docs/FRIDAY_TESTING.md` for the
   measured effect.
+- **The relay is transport only.** Friday dials out; the relay forwards `/v1/` paths and
+  stores only an in-memory hash of the laptop's relay key. It has no command logic and
+  never sees a device token in usable form. Friday still authenticates every request.
 - **Two assistant identities coexist.** Sentences starting with "on my laptop ..." still
   belong to `laptop-agent/` while it is configured; sentences addressed to Friday (wake
   word or "on the pc" style references) go to Friday. Everything else is unchanged
@@ -335,11 +352,13 @@ To prevent spam, we use a `context_state` table with `last_summary_at`, `debounc
 - The laptop agent binds to every interface so the phone can reach it. Do not port-forward
   it, and do not run it on public Wi-Fi. Use a private overlay such as Tailscale if the
   phone and laptop are not on the same network.
-- Friday's link is TLS with a self-signed certificate that the phone pins by SHA-256,
-  plus a per-device token stored only as a hash on the laptop. Turning TLS off is an
-  explicit downgrade; regenerating the certificate invalidates every pairing. It binds to
-  the local network by default, has no public endpoint, and must not be port-forwarded.
-  Details and residual risks: `docs/FRIDAY_SECURITY.md`.
+- Friday's LAN link is TLS with a self-signed certificate that the phone pins by
+  SHA-256, plus a per-device token stored only as a hash on the laptop. Turning TLS
+  off is an explicit downgrade; regenerating the certificate invalidates every LAN
+  pairing. Across the internet, Friday makes only outbound connections to the optional
+  relay; the relay forwards just `/v1/` and has no command logic, and Friday still
+  validates the device token on every request. Do not port-forward 8790. Details and
+  residual risks: `docs/FRIDAY_SECURITY.md`.
 - Prefer `allowlist` mode over `free` mode; the agent refuses unknown commands there.
 - All data otherwise stays within your Render services + DB.
 - RLS should be enabled for the dashboard if you add auth

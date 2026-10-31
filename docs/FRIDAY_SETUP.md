@@ -29,12 +29,16 @@ languages depend on what is installed in Windows.
 
 ## 2. Install
 
-1. Copy `friday.exe` to any folder you like. It was delivered on the Desktop.
+1. Copy `Friday-1.1.0.exe` to any folder you like. It was delivered on the
+   Desktop. The running program is still `Friday`; the version is in the file
+   name so an older build is not overwritten.
 2. Double-click it. On first run Windows Firewall asks about network access.
    Tick **Private networks** and allow it - that is the phone service on port
    8790. If the prompt never appeared, see step 4 below.
 3. The window opens full-screen with the core in the middle. That is the normal
-   state; nothing is hidden and nothing is recording until you ask it to.
+   state. The microphone is open only because the wake word is on by default, and
+   the status bar says `MIC` while it is capturing; turn it off under
+   **Settings > Voice**.
 
 Friday keeps everything it owns in one folder:
 
@@ -99,21 +103,31 @@ colour of the ring and the status line follow the actual state of the assistant.
 
 **Voice**
 
-Voice is on, but the wake word is off by default - so Friday does not sit
-listening to the room. Press `Ctrl+Alt+Space` or click the core to talk; press it
-again to stop. Turn the wake word on under **Settings > Voice** if you want
-"Friday, ..." hands-free, knowing that this leaves the microphone capturing
-between commands. The status bar shows `MIC` only while capture is actually open.
+The wake word is on by default, so the microphone opens at startup and waits for
+"Friday". The status bar shows `MIC` only while capture is really open, and the
+tray tooltip repeats it. Say **"Friday, open Chrome"**; after a command Friday
+stays hands-free for 30 seconds of silence (configurable as
+`voice.follow_up_seconds`) and every phrase you speak resets that window. A bare
+"Friday" acknowledges and opens the window.
+
+Turn the wake word off under **Settings > Voice** if you do not want the
+microphone open while idle. With it off, press `Ctrl+Alt+Space` or click the core
+to capture one phrase. `Ctrl+Alt+F` toggles listening either way.
+
+Replies are spoken as they are written: complete sentences go to the voice queue
+while the model is still producing the rest, so the first words arrive without
+waiting for the whole answer. If you interrupt by speaking, Friday stops talking
+and handles what you said.
 
 Voice limitations worth knowing now:
 
 - Windows speech (System.Speech) always uses the **default** input and output
   device. The device picker says so rather than offering a choice that would not
   work.
-- Recognition and speech synthesis are local; audio is never written to disk and
-  never leaves the machine.
-- Replies are spoken by default (`Privacy > Speak replies`). If you interrupt by
-  speaking, Friday stops talking.
+- Recognition, synthesis and the wake word are local; audio is never written to
+  disk and never leaves the machine.
+- Some Windows voices are more robotic than others. Pick one under **Settings >
+  Voice**; **TEST VOICE** speaks a real sentence with the current rate and volume.
 
 ---
 
@@ -173,22 +187,27 @@ Remove it again with `netsh advfirewall firewall delete rule name="Friday 8790"`
 
 ### On the phone
 
-1. Install `JARVIS-3.4.apk` (versionCode 16). It upgrades 3.3 in place.
-2. Open **Automations** and find the **FRIDAY (LAPTOP ASSISTANT)** card, or use
-   **PAIR OR OPEN FRIDAY**. This opens the Friday screen.
-3. Type the laptop address (`192.168.1.20`; the app adds `https://` and the port
-   itself), leave port `8790`, and keep the wake word `friday`.
+1. Install `JARVIS-3.5.apk` (versionCode 17). It upgrades 3.4 in place and keeps
+   the package name, private data and signing key.
+2. Open **JARVIS > Friday** from the drawer. This opens the Friday screen.
+3. **Same Wi-Fi:** type the laptop address (`192.168.1.20`; the app adds
+   `https://` and the port itself), leave port `8790`, and keep the wake word
+   `friday`. **Different networks:** paste the relay URL instead (section 7) and
+   leave the LAN fields empty.
 4. Press **SAVE**, then **TEST**. You should see Friday's version, machine name,
    `TLS: on`, the emergency-stop state and its SHA-256 fingerprint.
 5. Compare that fingerprint with **TLS fingerprint** on the laptop's Phone page,
    or press **COPY FINGERPRINT** and paste it into a message to yourself. They
-   must match exactly.
+   must match exactly. Through the relay the phone trusts the relay's public TLS
+   and uses the laptop id as the identity check instead.
 6. Type the pairing code and press **PAIR**. The phone stores its own device
-   token and pins the certificate; nothing else is stored.
+   token; on the LAN it also pins the certificate. Through the relay it learns
+   the laptop id from the pairing response.
 7. **REFRESH STATUS** should now show the laptop's state and recent tasks.
 
 If pairing fails, the code is the usual reason: codes are single use, expire,
-and a new code invalidates the old one.
+and a new code invalidates the old one. Through the relay, "no laptop is
+connected" means Friday is not running with the relay enabled.
 
 ### Using it from the phone
 
@@ -219,16 +238,34 @@ the switch off. Friday then starts in the notification area
 
 ---
 
-## 7. Away from home
+## 7. Away from home (internet relay)
 
-The phone service listens on your local network. It is not exposed to the
-internet, and this build does not include a relay or a public endpoint.
+This build includes a small relay (`relay/server.js`) so the phone can reach the
+laptop from mobile data or any Wi-Fi with **no port forwarding and no router
+change**. Friday dials out to the relay; nothing on your router is opened.
 
-If you want it while you are out, put both devices on a private tunnel such as
-Tailscale and use the laptop's Tailscale address instead of its LAN address.
-That is a configuration you make outside this app; it was **not** tested here,
-and there is no NAT-traversal, relay or port-forwarding support inside Friday.
-Do not forward port 8790 from your router.
+1. Deploy the relay to Render with `render.yaml` (service
+   `bonjee-friday-relay`, root `relay/`, health check `/health`), or run it on any
+   small Node 20 host with TLS in front. `relay/README.md` has the full steps.
+2. On the laptop: **Settings > Phone > Internet relay**, enable it and paste the
+   `https://...` URL. On save Friday generates a **laptop id** and a **256-bit
+   relay key**. The id is public routing information; the key is DPAPI-encrypted
+   on disk. **COPY LAPTOP ID** shows the id; **NEW ID & KEY** rotates both and
+   stops old relay sessions.
+3. On the phone: **Friday > Relay URL**, paste the same URL, save, then pair
+   once. The phone learns the laptop id automatically; no LAN address is needed.
+4. Watch the status bars: the laptop shows `RELAY` with a forwarded count, and
+   the phone's Friday screen shows the relay laptop id. `RELAY RETRY` means the
+   relay is unreachable; Friday backs off and reconnects by itself.
+
+The relay forwards only `/v1/` traffic. It has no command logic and no shell, and
+it keeps only an in-memory SHA-256 of each laptop key. It never stores device
+tokens, pairing codes or request bodies. Friday still authenticates every phone
+request, so revoking a device on the laptop takes effect immediately even through
+the relay. Pairing is rate-limited to 20 attempts per IP per minute.
+
+A private tunnel (Tailscale or similar) still works as a fallback, but it is no
+longer required.
 
 ---
 
@@ -262,6 +299,10 @@ log: it redirects `FRIDAY_HOME` to a temporary folder.
 | Phone gets 423 | Emergency stop is engaged. Release it on the laptop. |
 | Phone gets 426 | App and laptop speak different protocol versions. Update the older one; the contract is `1.0`. |
 | Phone gets 429 | More than 120 requests in a minute from one device. Wait a few seconds. |
+| Phone says `laptop_offline` / relay 503 | Friday is not connected to the relay. Open Friday on the laptop and check its `RELAY` status; the relay may also be asleep. |
+| Laptop says `RELAY RETRY` | The relay URL is wrong or the relay is down. Friday retries with backoff; check `/health` on the relay. |
+| Pairing through the relay says no laptop | Friday is not running with the relay enabled, or it has not finished its first poll. Wait a few seconds and try a fresh code. |
+| Phone works on Wi-Fi but not mobile data | The relay URL is missing on the phone, or the laptop is offline. Check the Friday screen's relay line. |
 | "Port 8790 is already in use" | Another program owns the port. Change it in **Settings > Phone** and use the same port on the phone. |
 | Pairing code rejected | Codes are single use and expire. Generate a new one. |
 | Replies are slow | Local commands answer in tens of milliseconds; open questions depend on the AI provider. See the measured numbers in `FRIDAY_TESTING.md`. |

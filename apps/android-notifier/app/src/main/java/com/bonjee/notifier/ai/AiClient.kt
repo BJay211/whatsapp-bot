@@ -37,6 +37,8 @@ class AiClient(context: Context) {
         val error: String,
         val model: String,
         val totalTokens: Int,
+        /** True when the text was already delivered sentence by sentence. */
+        val streamed: Boolean = false,
     ) {
         /** A short truthful line about where this answer came from. */
         fun sourceLine(): String = when {
@@ -113,6 +115,124 @@ class AiClient(context: Context) {
             }
         } catch (e: Exception) {
             Answer(false, 0, "", connectionError(e), model, 0)
+        }
+    }
+
+    /**
+     * Streams the answer and hands complete sentences to [onSentence] while the
+     * provider is still generating. The full text is returned as usual, so the
+     * screen and the follow-up context stay complete.
+     *
+     * If the provider ignores `stream=true` or the stream breaks before any
+     * prose arrives, the normal call is used instead. A partial stream is
+     * reported as a failure with the text received so far, not as success.
+     */
+    fun chatStreaming(
+        history: List<Message>,
+        onSentence: (String) -> Unit,
+    ): Answer {
+        if (!canCall()) {
+            return Answer(false, 0, "", "AI has no API key or model.", "", 0)
+        }
+        val model = prefs.aiModel.trim()
+        val url = baseUrl() + "/chat/completions"
+        val messages = JSONArray()
+        messages.put(JSONObject().put("role", "system").put("content", systemPrompt()))
+        history.takeLast(MAX_TURNS * 2).forEach { message ->
+            if (message.content.isBlank()) return@forEach
+            messages.put(JSONObject().put("role", message.role).put("content", message.content))
+        }
+        val payload = JSONObject().apply {
+            put("model", model)
+            put("messages", messages)
+            put("temperature", 0.3)
+            put("max_tokens", 1024)
+            put("stream", true)
+        }
+
+        val request = Request.Builder()
+            .url(url)
+            .post(payload.toString().toRequestBody(JSON))
+            .header("Authorization", "Bearer " + prefs.aiApiKey.trim())
+            .header("Accept", "text/event-stream")
+            .build()
+
+        val full = StringBuilder()
+        var delivered = false
+        val buffer = com.bonjee.notifier.voice.SentenceBuffer { sentence ->
+            delivered = true
+            onSentence(sentence)
+        }
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val body = response.body?.string().orEmpty()
+                    return Answer(
+                        false,
+                        response.code,
+                        "",
+                        describeError(response.code, body, model),
+                        model,
+                        0,
+                    )
+                }
+
+                val source = response.body?.source()
+                    ?: return Answer(false, response.code, "", "The provider sent no stream.", model, 0)
+                var tokens = 0
+                var served = model
+                while (true) {
+                    val line = source.readUtf8Line() ?: break
+                    if (line.isBlank()) continue
+                    if (!line.startsWith("data:", ignoreCase = true)) continue
+                    val data = line.substring(5).trim()
+                    if (data == "[DONE]") break
+                    val json = try {
+                        JSONObject(data)
+                    } catch (t: Throwable) {
+                        continue
+                    }
+                    served = json.optString("model").ifBlank { served }
+                    json.optJSONObject("usage")?.optInt("total_tokens", 0)?.let {
+                        if (it > 0) tokens = it
+                    }
+                    val choices = json.optJSONArray("choices") ?: continue
+                    for (i in 0 until choices.length()) {
+                        val delta = choices.optJSONObject(i)
+                            ?.optJSONObject("delta")
+                            ?.optString("content")
+                            .orEmpty()
+                        if (delta.isEmpty()) continue
+                        full.append(delta)
+                        buffer.append(delta)
+                    }
+                }
+                buffer.finish()
+
+                val text = full.toString().trim()
+                if (text.isEmpty()) {
+                    // The endpoint may not implement SSE at all. The ordinary
+                    // call is the reliable fallback.
+                    return@use chat(history)
+                }
+                Answer(true, 200, text, "", served, tokens, streamed = delivered)
+            }
+        } catch (e: Exception) {
+            val partial = full.toString().trim()
+            if (partial.isNotEmpty()) {
+                Answer(
+                    false,
+                    0,
+                    partial,
+                    "The stream stopped early: ${e.message ?: e.javaClass.simpleName}",
+                    model,
+                    0,
+                    streamed = delivered,
+                )
+            } else {
+                Answer(false, 0, "", connectionError(e), model, 0)
+            }
         }
     }
 

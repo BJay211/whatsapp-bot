@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnVoiceBack"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:minWidth="0dp"
+            android:text="‹"
+            android:textColor="@color/cyan"
+            android:textSize="24sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:letterSpacing="0.16"
+            android:text="VOICE"
+            android:textColor="@color/cyan"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/txtVoiceEngine"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="monospace"
+        android:textColor="@color/text_tertiary"
+        android:textSize="10sp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border_cyan"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/JarvisSection"
+                        android:layout_marginTop="0dp"
+                        android:text="CONVERSATION" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchAutoSpeak"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Read answers aloud"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchContinuous"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Keep listening after an answer"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchBargeIn"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Let me interrupt JARVIS by speaking"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchWake"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Listen for “Hey JARVIS” in the background"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:alpha="0.78"
+                        android:text="Background wake listening needs a visible notification and the microphone. Some phones still pause it to save battery; the microphone button always works."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="10sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="FOLLOW-UP WINDOW"
+                        android:textColor="@color/cyan_glow"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/txtFollowUp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="30 seconds without speech"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+
+                    <SeekBar
+                        android:id="@+id/seekFollowUp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:max="60" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/JarvisSection"
+                        android:layout_marginTop="0dp"
+                        android:text="VOICE AND TONE" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="VOICE"
+                        android:textColor="@color/cyan_glow"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+
+                    <Spinner
+                        android:id="@+id/spinnerVoice"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="2dp"
+                        android:background="@color/bg_card_alt" />
+
+                    <TextView
+                        android:id="@+id/txtRate"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="Speed 1.00×"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+
+                    <SeekBar
+                        android:id="@+id/seekRate"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:max="150" />
+
+                    <TextView
+                        android:id="@+id/txtPitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Pitch 1.00×"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+
+                    <SeekBar
+                        android:id="@+id/seekPitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:max="150" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnVoiceTest"
+                            style="@style/JarvisButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="TEST VOICE"
+                            android:textColor="@color/black"
+                            app:backgroundTint="@color/cyan" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnVoiceStop"
+                            style="@style/JarvisButton.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:text="STOP"
+                            app:strokeColor="@color/red" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border_cyan"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/JarvisSection"
+                        android:layout_marginTop="0dp"
+                        android:text="CONTEXT" />
+
+                    <TextView
+                        android:id="@+id/txtVoiceContext"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnVoiceClear"
+                        style="@style/JarvisButton.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="CLEAR THIS PHONE'S CONVERSATION" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:id="@+id/txtVoiceStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:paddingBottom="16dp"
+                android:textColor="@color/text_dim"
+                android:textSize="10sp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

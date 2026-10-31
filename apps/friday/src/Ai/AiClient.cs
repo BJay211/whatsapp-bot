@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -9,6 +10,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Friday.Core;
+using Friday.Voice;
 
 namespace Friday.Ai;
 
@@ -171,6 +173,202 @@ public sealed class AiClient
         {
             return new AiReply(false, "", Array.Empty<AiToolCall>(), ConnectionError(ex), 0, model, 0);
         }
+    }
+
+    /// <summary>
+    /// Streams one chat completion. Complete sentences are handed to
+    /// <paramref name="onSentence"/> while the provider is still writing, so
+    /// Friday can start speaking before the answer is finished. Tool-call deltas
+    /// are accumulated and returned exactly like the non-streaming call.
+    /// </summary>
+    public async Task<AiReply> CompleteStreamingAsync(
+        IReadOnlyList<ChatMessage> messages,
+        JsonArray? tools,
+        Action<string> onSentence,
+        CancellationToken token)
+    {
+        var key = _config.EffectiveApiKey(out _);
+        if (string.IsNullOrWhiteSpace(key))
+            return new AiReply(false, "", Array.Empty<AiToolCall>(),
+                "No AI API key is configured.", 0, "", 0);
+
+        var model = _config.EffectiveModel();
+        var url = _config.EffectiveBaseUrl() + "/chat/completions";
+
+        var payload = new JsonObject
+        {
+            ["model"] = model,
+            ["messages"] = new JsonArray(messages.Select(m => (JsonNode)m.ToJson()).ToArray()),
+            ["temperature"] = _config.Ai.Temperature,
+            ["max_tokens"] = _config.Ai.MaxTokens,
+            ["stream"] = true,
+        };
+        if (tools is { Count: > 0 })
+        {
+            payload["tools"] = tools.DeepClone();
+            payload["tool_choice"] = "auto";
+        }
+
+        var full = new StringBuilder();
+        var pending = new StringBuilder();
+        var calls = new Dictionary<int, (string Id, string Name, StringBuilder Args)>();
+        var served = model;
+        var tokens = 0;
+
+        void Push(string delta)
+        {
+            full.Append(delta);
+            pending.Append(delta);
+            var text = pending.ToString();
+            var cut = LastSentenceBoundary(text);
+            if (cut <= 0) return;
+            var complete = text[..cut];
+            pending.Remove(0, cut);
+            foreach (var sentence in SpeechText.Chunks(SpeechText.Split(complete)))
+                onSentence(sentence);
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"),
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+            using var response = await _http.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+                return new AiReply(false, "", Array.Empty<AiToolCall>(),
+                    DescribeError((int)response.StatusCode, body, model), (int)response.StatusCode, model, 0);
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+            using var reader = new StreamReader(stream);
+
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                var line = await reader.ReadLineAsync(token).ConfigureAwait(false);
+                if (line is null) break;
+                if (line.Length == 0) continue;
+                if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var data = line[5..].Trim();
+                if (data == "[DONE]") break;
+
+                JsonNode? node;
+                try { node = JsonNode.Parse(data); }
+                catch { continue; }
+                var json = node?.AsObject();
+                if (json is null) continue;
+
+                served = json["model"]?.GetValue<string>() ?? served;
+                if (json["usage"]?["total_tokens"]?.GetValue<int>() is { } used && used > 0)
+                    tokens = used;
+
+                var choices = json["choices"]?.AsArray();
+                if (choices is null || choices.Count == 0) continue;
+                var delta = choices[0]?["delta"]?.AsObject();
+                if (delta is null) continue;
+
+                if (delta["content"]?.GetValue<string>() is { Length: > 0 } content)
+                    Push(content);
+
+                if (delta["tool_calls"] is JsonArray toolDeltas)
+                {
+                    foreach (var item in toolDeltas)
+                    {
+                        if (item is not JsonObject tool) continue;
+                        var index = tool["index"]?.GetValue<int>() ?? calls.Count;
+                        if (!calls.TryGetValue(index, out var call))
+                        {
+                            call = ("", "", new StringBuilder());
+                        }
+                        var id = tool["id"]?.GetValue<string>();
+                        var name = tool["function"]?["name"]?.GetValue<string>();
+                        var args = tool["function"]?["arguments"]?.GetValue<string>();
+                        calls[index] = (
+                            string.IsNullOrWhiteSpace(id) ? call.Id : id,
+                            string.IsNullOrWhiteSpace(name) ? call.Name : name,
+                            call.Args.Append(args ?? ""));
+                    }
+                }
+            }
+
+            foreach (var sentence in SpeechText.Chunks(SpeechText.Split(pending.ToString())))
+                onSentence(sentence);
+
+            var text = full.ToString().Trim();
+            var toolCalls = calls
+                .OrderBy(pair => pair.Key)
+                .Where(pair => pair.Value.Name.Length > 0)
+                .Select(pair => new AiToolCall
+                {
+                    Id = pair.Value.Id.Length > 0
+                        ? pair.Value.Id
+                        : "call_" + Guid.NewGuid().ToString("n")[..8],
+                    Name = pair.Value.Name,
+                    Arguments = pair.Value.Args.Length > 0 ? pair.Value.Args.ToString() : "{}",
+                })
+                .ToList();
+
+            if (text.Length == 0 && toolCalls.Count == 0)
+            {
+                // The endpoint may not implement SSE at all.
+                return await CompleteAsync(messages, tools, token).ConfigureAwait(false);
+            }
+
+            return new AiReply(true, text, toolCalls, "", 200, served, tokens);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var partial = full.ToString().Trim();
+            var partialCalls = calls
+                .Where(pair => pair.Value.Name.Length > 0)
+                .Select(pair => new AiToolCall
+                {
+                    Id = pair.Value.Id,
+                    Name = pair.Value.Name,
+                    Arguments = pair.Value.Args.ToString(),
+                })
+                .ToList();
+            return new AiReply(
+                false,
+                partial,
+                partialCalls,
+                ConnectionError(ex),
+                0,
+                model,
+                tokens);
+        }
+    }
+
+    private static int LastSentenceBoundary(string text)
+    {
+        var cut = -1;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (ch is '.' or '!' or '?' or '\n')
+            {
+                if (i + 1 >= text.Length || char.IsWhiteSpace(text[i + 1])) cut = i + 1;
+            }
+        }
+        if (cut > 0 && cut < 12)
+        {
+            var next = text.IndexOf('\n', cut);
+            if (next > cut) cut = next + 1;
+        }
+        return cut;
     }
 
     private AiReply Parse(string body, string model)

@@ -32,9 +32,31 @@ public sealed class JarvisCore : Control
     private int _fps = 60;
     private float _progress = -1f;
     private float _flash;
+    private bool _hover;
+    private float _hoverX;
+    private float _hoverY;
+    private double _rippleAt = -100;
+    private float _rippleX;
+    private float _rippleY;
+    private int _followUp;
 
     public bool ShowParticles { get; set; } = true;
     public bool ReducedMotion { get; set; }
+
+    /// <summary>Seconds left in the hands-free conversation window (0 = none).</summary>
+    public int FollowUpSeconds
+    {
+        get => _followUp;
+        set => _followUp = Math.Max(0, value);
+    }
+
+    /// <summary>Starts a visual ripple from the centre or the clicked point.</summary>
+    public void Pulse(float x = -1, float y = -1)
+    {
+        _rippleAt = _clock.Elapsed.TotalSeconds;
+        _rippleX = x >= 0 ? x : Width / 2f;
+        _rippleY = y >= 0 ? y : Height / 2f;
+    }
 
     public string Accent
     {
@@ -87,6 +109,7 @@ public sealed class JarvisCore : Control
                  ControlStyles.ResizeRedraw, true);
         BackColor = Theme.Bg;
         TabStop = false;
+        Cursor = Cursors.Hand;
         _timer = new System.Windows.Forms.Timer { Interval = 16 };
         _timer.Tick += (_, _) =>
         {
@@ -129,6 +152,27 @@ public sealed class JarvisCore : Control
     {
         CoreClicked?.Invoke(this, e);
         base.OnClick(e);
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        _hover = true;
+        _hoverX = Width > 0 ? (e.X / (float)Width - 0.5f) * 2f : 0f;
+        _hoverY = Height > 0 ? (e.Y / (float)Height - 0.5f) * 2f : 0f;
+        base.OnMouseMove(e);
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        _hover = false;
+        _hoverX = _hoverY = 0f;
+        base.OnMouseLeave(e);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        Pulse(e.X, e.Y);
+        base.OnMouseDown(e);
     }
 
     private void Step()
@@ -257,6 +301,11 @@ public sealed class JarvisCore : Control
         var cx = Width / 2f;
         var cy = Height / 2f - Math.Min(Height * 0.02f, 14f);
         var baseR = Math.Min(Width, Height) * (Width < Height ? 0.455f : 0.455f);
+        if (!ReducedMotion && _hover)
+        {
+            cx += _hoverX * baseR * 0.035f;
+            cy += _hoverY * baseR * 0.035f;
+        }
         var now = (float)_clock.Elapsed.TotalSeconds;
         var amplitude = _smoothedAmplitude;
         var pulse = _smoothedPulse;
@@ -268,18 +317,25 @@ public sealed class JarvisCore : Control
         {
             DrawOffline(g, cx, cy, baseR, now);
             DrawCaption(g, cx, cy, baseR, state, accent);
+            DrawCorners(g, accent);
             return;
         }
 
         var rotation = ReducedMotion ? 0f : now * (state == FridayState.Thinking ? 0.55f : 0.18f);
         var counter = ReducedMotion ? 0f : -now * (state == FridayState.Thinking ? 0.9f : 0.11f);
 
+        DrawRadar(g, cx, cy, baseR, now, accent, state);
         DrawCorona(g, cx, cy, baseR, now, accent, amplitude, rotation, state);
         DrawParticles(g, cx, cy, baseR, accent, state);
         DrawRings(g, cx, cy, baseR, now, accent, pulse, rotation, counter, state, amplitude);
+        DrawAudioBars(g, cx, cy, baseR, now, accent, amplitude, state);
         DrawCore(g, cx, cy, baseR, accent, hot, pulse, amplitude, now, state);
         DrawStateArcs(g, cx, cy, baseR, now, accent, state, amplitude);
+        DrawOrbitals(g, cx, cy, baseR, now, accent, state);
+        DrawFollowUp(g, cx, cy, baseR, accent);
+        DrawRipple(g, cx, cy, baseR, now, accent);
         DrawCaption(g, cx, cy, baseR, state, accent);
+        DrawCorners(g, accent);
     }
 
     private void DrawHaze(Graphics g, float cx, float cy, float baseR, Color accent, FridayState state)
@@ -527,6 +583,168 @@ public sealed class JarvisCore : Control
             using var pen = new Pen(Color.FromArgb((int)(170 * _flash), accent), 2f);
             g.DrawEllipse(pen, cx - radius, cy - radius, radius * 2, radius * 2);
         }
+    }
+
+    private void DrawRadar(Graphics g, float cx, float cy, float baseR, float now,
+        Color accent, FridayState state)
+    {
+        if (ReducedMotion || VisualMode == "minimal") return;
+
+        var outer = baseR * 1.035f;
+        using var clip = new GraphicsPath();
+        clip.AddEllipse(cx - outer, cy - outer, outer * 2, outer * 2);
+        var saved = g.Save();
+        g.SetClip(clip);
+
+        var speed = state == FridayState.Thinking ? 1.15f : 0.55f;
+        var sweep = now * speed % MathF.PI * 2;
+        const int trail = 46;
+        for (var i = 0; i < trail; i++)
+        {
+            var angle = sweep - i * 0.016f;
+            var alpha = (int)(42 * (1f - i / (float)trail));
+            if (alpha <= 0) continue;
+            using var pen = new Pen(Color.FromArgb(alpha, accent), 1f);
+            g.DrawLine(pen,
+                cx + MathF.Cos(angle) * baseR * 0.22f, cy + MathF.Sin(angle) * baseR * 0.22f,
+                cx + MathF.Cos(angle) * outer, cy + MathF.Sin(angle) * outer);
+        }
+
+        using (var lead = new Pen(Color.FromArgb(120, accent), 1.4f))
+        {
+            g.DrawLine(lead,
+                cx + MathF.Cos(sweep) * baseR * 0.22f, cy + MathF.Sin(sweep) * baseR * 0.22f,
+                cx + MathF.Cos(sweep) * outer, cy + MathF.Sin(sweep) * outer);
+        }
+        g.Restore(saved);
+    }
+
+    private void DrawAudioBars(Graphics g, float cx, float cy, float baseR, float now,
+        Color accent, float amplitude, FridayState state)
+    {
+        if (ReducedMotion) return;
+        var count = VisualMode == "minimal" ? 32 : 72;
+        var radius = baseR * 1.055f;
+        var engaged = state is FridayState.Listening or FridayState.Speaking or FridayState.Thinking;
+        var level = Math.Clamp(amplitude * 1.8f + (engaged ? 0.18f : 0.02f), 0f, 1f);
+
+        for (var i = 0; i < count; i++)
+        {
+            var angle = (float)i / count * MathF.PI * 2 - MathF.PI / 2f;
+            var wave = 0.5f + 0.5f * MathF.Sin(now * 4.2f + i * 0.62f);
+            var height = baseR * (0.006f + level * 0.075f * wave);
+            if (i % 6 == 0) height *= 1.35f;
+            var alpha = (int)(34 + 150 * level * (0.35f + 0.65f * wave));
+            using var pen = new Pen(Color.FromArgb(Math.Clamp(alpha, 0, 255), accent),
+                i % 6 == 0 ? 1.5f : 0.9f);
+            g.DrawLine(pen,
+                cx + MathF.Cos(angle) * radius, cy + MathF.Sin(angle) * radius,
+                cx + MathF.Cos(angle) * (radius + height), cy + MathF.Sin(angle) * (radius + height));
+        }
+    }
+
+    private void DrawOrbitals(Graphics g, float cx, float cy, float baseR, float now,
+        Color accent, FridayState state)
+    {
+        if (ReducedMotion || VisualMode == "minimal") return;
+        var speed = state == FridayState.Thinking ? 0.75f : 0.30f;
+        for (var i = 0; i < 3; i++)
+        {
+            var orbit = now * speed + i * (MathF.PI * 2f / 3f);
+            var radius = baseR * (1.12f + i * 0.035f);
+            for (var t = 0; t < 10; t++)
+            {
+                var a = orbit - t * 0.028f;
+                var alpha = (int)(110 * (1f - t / 10f));
+                using var trail = new SolidBrush(Color.FromArgb(alpha, accent));
+                var size = 1.6f + (10 - t) * 0.16f;
+                g.FillEllipse(trail,
+                    cx + MathF.Cos(a) * radius - size / 2f,
+                    cy + MathF.Sin(a) * radius - size / 2f, size, size);
+            }
+
+            using var dot = new SolidBrush(Color.FromArgb(230, Theme.AccentHot(_accent)));
+            g.FillEllipse(dot,
+                cx + MathF.Cos(orbit) * radius - 2.6f,
+                cy + MathF.Sin(orbit) * radius - 2.6f, 5.2f, 5.2f);
+        }
+    }
+
+    private void DrawFollowUp(Graphics g, float cx, float cy, float baseR, Color accent)
+    {
+        if (_followUp <= 0) return;
+        var radius = baseR * 1.095f;
+        var fraction = Math.Clamp(_followUp / 30f, 0.02f, 1f);
+
+        using (var track = new Pen(Color.FromArgb(26, accent), 2.4f))
+            g.DrawEllipse(track, cx - radius, cy - radius, radius * 2, radius * 2);
+
+        using var pen = new Pen(Color.FromArgb(200, accent), 2.6f);
+        pen.StartCap = LineCap.Round;
+        pen.EndCap = LineCap.Round;
+        g.DrawArc(pen, cx - radius, cy - radius, radius * 2, radius * 2, -90, 360 * fraction);
+
+        if (Width < 360) return;
+        using var font = Theme.Mono(7.5f);
+        using var brush = new SolidBrush(Color.FromArgb(210, accent));
+        var label = $"HANDS-FREE {_followUp:00}s";
+        var size = g.MeasureString(label, font);
+        g.DrawString(label, font, brush, cx - size.Width / 2f, cy - radius - size.Height - 2);
+    }
+
+    private void DrawRipple(Graphics g, float cx, float cy, float baseR, float now, Color accent)
+    {
+        var age = now - _rippleAt;
+        if (age < 0 || age > 1.5f) return;
+        var t = (float)(age / 1.5);
+        var radius = baseR * (0.10f + 1.05f * t);
+        var alpha = (int)(190 * (1f - t));
+
+        using var ring = new Pen(Color.FromArgb(Math.Clamp(alpha, 0, 255), accent), 1.8f);
+        ring.StartCap = LineCap.Round;
+        ring.EndCap = LineCap.Round;
+        g.DrawEllipse(ring, _rippleX - radius, _rippleY - radius, radius * 2, radius * 2);
+
+        if (t < 0.55f)
+        {
+            var inner = radius * 0.62f;
+            using var soft = new Pen(Color.FromArgb(Math.Clamp(alpha / 3, 0, 255), accent), 3.6f);
+            g.DrawEllipse(soft, _rippleX - inner, _rippleY - inner, inner * 2, inner * 2);
+        }
+    }
+
+    /// <summary>Corner brackets and tiny telemetry, so the core reads as a HUD.</summary>
+    private void DrawCorners(Graphics g, Color accent)
+    {
+        if (Width < 260 || Height < 220) return;
+        var inset = 18f;
+        var arm = Math.Min(58f, Math.Min(Width, Height) * 0.10f);
+        using var pen = new Pen(Color.FromArgb(_hover ? 118 : 62, accent), 1f);
+
+        // Four L-shaped brackets.
+        g.DrawLine(pen, inset, inset, inset + arm, inset);
+        g.DrawLine(pen, inset, inset, inset, inset + arm);
+        g.DrawLine(pen, Width - inset, inset, Width - inset - arm, inset);
+        g.DrawLine(pen, Width - inset, inset, Width - inset, inset + arm);
+        g.DrawLine(pen, inset, Height - inset, inset + arm, Height - inset);
+        g.DrawLine(pen, inset, Height - inset, inset, Height - inset - arm);
+        g.DrawLine(pen, Width - inset, Height - inset, Width - inset - arm, Height - inset);
+        g.DrawLine(pen, Width - inset, Height - inset, Width - inset, Height - inset - arm);
+
+        using var font = Theme.Mono(7f);
+        using var faint = new SolidBrush(Color.FromArgb(_hover ? 150 : 92, Theme.Dim));
+        using var bright = new SolidBrush(Color.FromArgb(170, accent));
+        var pad = new PointF(inset + 8, inset + 6);
+        g.DrawString("FRIDAY // CORE", font, bright, pad);
+        g.DrawString("LINK  ONLINE", font, faint, pad.X, inset + 19);
+
+        var audio = $"AUDIO {(int)Math.Clamp(_state.Amplitude * 100f, 0, 100):000}";
+        var audioSize = g.MeasureString(audio, font);
+        g.DrawString(audio, font, faint, Width - inset - 8 - audioSize.Width, Height - inset - 18 - audioSize.Height);
+
+        var clock = DateTime.Now.ToString("HH:mm:ss");
+        var clockSize = g.MeasureString(clock, font);
+        g.DrawString(clock, font, faint, Width - inset - 8 - clockSize.Width, Height - inset - 8 - clockSize.Height);
     }
 
     private void DrawCaption(Graphics g, float cx, float cy, float baseR, FridayState state, Color accent)

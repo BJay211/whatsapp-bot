@@ -169,20 +169,28 @@ class FridayClient(context: Context) {
             .build()
     }
 
-    private fun clientFor(base: String): OkHttpClient =
-        if (base.startsWith("https://", ignoreCase = true)) {
-            pinnedClient(prefs.fridayFingerprint)
-        } else {
-            plainClient
-        }
+    private fun clientFor(base: String): OkHttpClient {
+        if (!base.startsWith("https://", ignoreCase = true)) return plainClient
+
+        // Relay mode goes to the relay's publicly-trusted certificate, so the
+        // laptop's self-signed pin does not apply. The device token still
+        // authenticates this phone on every request and Friday checks it.
+        if (prefs.fridayUseRelay()) return plainClient
+
+        val pin = prefs.fridayFingerprint
+        return if (pin.isBlank()) plainClient else pinnedClient(pin)
+    }
 
     fun baseUrl(): String = prefs.fridayBaseUrl()
 
     fun isConfigured(): Boolean =
-        prefs.fridayEnabled && prefs.fridayHost.isNotBlank() && prefs.fridayToken.isNotBlank()
+        prefs.fridayEnabled &&
+            prefs.fridayToken.isNotBlank() &&
+            (prefs.fridayHost.isNotBlank() || prefs.fridayUseRelay())
 
     fun hasPinnedCertificate(): Boolean =
-        prefs.fridayFingerprint.isNotBlank() ||
+        prefs.fridayUseRelay() ||
+            prefs.fridayFingerprint.isNotBlank() ||
             !baseUrl().startsWith("https://", ignoreCase = true)
 
     private fun auth(request: Request.Builder) {
@@ -233,7 +241,7 @@ class FridayClient(context: Context) {
      * later call is pinned to the certificate that issued the token.
      */
     fun pair(code: String, deviceName: String): Result<Paired> {
-        val base = baseUrl()
+        val base = prefs.fridayPairingBaseUrl()
         if (base.isBlank()) return fail("Set the laptop's address first.")
         val clean = code.replace("-", "").replace(" ", "").uppercase(Locale.US).trim()
         if (clean.length != 8) return fail("A pairing code is 8 characters, like ABCD-EFGH.")
@@ -278,6 +286,10 @@ class FridayClient(context: Context) {
                 prefs.fridayToken = paired.token
                 prefs.fridayDeviceId = paired.deviceId
                 if (paired.fingerprint.isNotBlank()) prefs.fridayFingerprint = paired.fingerprint
+                // The relay tells us which laptop accepted the code, so all later
+                // calls can be routed to it from any network.
+                val relayLaptop = json.optString("relay_laptop")
+                if (relayLaptop.isNotBlank()) prefs.fridayRelayLaptop = relayLaptop
                 prefs.fridayEnabled = true
                 prefs.fridayPairedAt = System.currentTimeMillis()
 
@@ -541,6 +553,13 @@ class FridayClient(context: Context) {
         423 -> "Friday's emergency stop is engaged. Release it on the laptop first.\n\n${errorMessage(body)}"
         426 -> "This app and Friday speak different protocol versions. Update the newer one.\n\n${errorMessage(body)}"
         429 -> "Too many requests. Wait a few seconds and try again."
+        503 -> if (prefs.fridayUseRelay()) {
+            "The laptop is not connected to the relay right now. " +
+                "Open Friday on the laptop and check its RELAY status."
+        } else {
+            "Friday is not reachable. ${errorMessage(body)}"
+        }
+        504 -> "Friday did not answer in time. Try again."
         else -> "HTTP $code from Friday\n${errorMessage(body)}"
     }
 
@@ -549,21 +568,40 @@ class FridayClient(context: Context) {
 
     private fun connectionHint(e: Exception, base: String): String {
         val raw = (e.message ?: e.javaClass.simpleName).lowercase(Locale.getDefault())
+        val relay = prefs.fridayUseRelay()
         val hint = when {
             e is CertificateException || raw.contains("certificate") || raw.contains("trust anchor") ->
-                "Friday's certificate was refused, so nothing was sent. If you regenerated " +
-                    "the laptop's certificate, pair the phone again."
+                if (relay) {
+                    "The secure connection to the relay failed, so nothing was sent. " +
+                        "Check the relay URL and try again."
+                } else {
+                    "Friday's certificate was refused, so nothing was sent. If you regenerated " +
+                        "the laptop's certificate, pair the phone again."
+                }
             raw.contains("ssl") || raw.contains("handshake") ->
-                "The secure connection failed. Check that Friday is running with TLS on, " +
-                    "and that the phone and laptop agree on the address."
+                if (relay) {
+                    "The secure connection to the relay failed. Check the relay URL."
+                } else {
+                    "The secure connection failed. Check that Friday is running with TLS on, " +
+                        "and that the phone and laptop agree on the address."
+                }
             raw.contains("timeout") || raw.contains("timed out") ->
                 "Friday did not answer in time. Is the Friday window still running?"
             raw.contains("refused") ->
                 "Connection refused. Friday is not listening, or the port is wrong."
             raw.contains("unable to resolve") || raw.contains("unknown host") ->
-                "That address does not resolve. Use the laptop's LAN IP, not a name."
+                if (relay) {
+                    "The relay address does not resolve. Check the relay URL in Friday > Settings."
+                } else {
+                    "That address does not resolve. Use the laptop's LAN IP, not a name."
+                }
             raw.contains("network is unreachable") || raw.contains("no route") ->
-                "The phone cannot reach that network. Phone and laptop must be on the same Wi-Fi."
+                if (relay) {
+                    "The phone cannot reach the relay. Check the phone's internet connection."
+                } else {
+                    "The phone cannot reach that network. Phone and laptop must be on the same Wi-Fi " +
+                        "or use the internet relay."
+                }
             else -> e.message ?: e.javaClass.simpleName
         }
         return "$hint\n\nAddress: ${base.trimEnd('/')}"
@@ -574,7 +612,13 @@ class FridayClient(context: Context) {
         if (trimmed.isEmpty()) return ""
         return runCatching {
             val json = JSONObject(trimmed)
-            json.optString("error").ifBlank { json.optString("message") }.ifBlank { trimmed.take(300) }
+            val detail = json.optString("detail")
+            val error = json.optString("error")
+            when {
+                detail.isNotBlank() -> detail
+                error.isNotBlank() -> error
+                else -> trimmed.take(300)
+            }
         }.getOrElse { trimmed.take(300) }
     }
 
